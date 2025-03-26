@@ -4,6 +4,7 @@ pragma solidity 0.8.29;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 /**
  * @title Ticket For Adrenaline Platform
@@ -11,6 +12,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @notice This contract manages the lifecycle of ticket NFTs with different states
  */
 contract Ticket is ERC721, AccessControl, ReentrancyGuard {
+    using Strings for uint256;
+
     // Custom errors
     error InvalidId(uint256 tokenId);
     error InvalidState(uint256 tokenId, uint8 status);
@@ -34,12 +37,14 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         address wallet;
         string productCode;
         string centerCode;
-        string activite;
         uint40 limitDate;
         uint40 reservationDate; 
     }
 
     mapping(uint256 => TicketData) public tickets;
+    
+    // Mapping associant productCode à son URI IPFS
+    mapping(string => string) private _productCodeURIs;
     
     uint256 private _tokenIdCounter;
     
@@ -52,6 +57,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     event TicketForSale(uint256 indexed tokenId);
     event TicketSold(uint256 indexed tokenId, address indexed newOwner);
     event TicketExpired(uint256 indexed tokenId);
+    event ProductCodeURISet(string productCode, string uri);
 
     /**
      * @notice Modifier to check if a ticket exists
@@ -79,17 +85,14 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @notice Creates a new ticket in AVAILABLE state
      * @param to Address of the recipient wallet
      * @param productCode Product code (familyCode + activityCode)
-     * @param activite Activity description
      * @return tokenId ID of the created ticket
      */
     function createTicket(
         address to, 
-        string calldata productCode, 
-        string calldata activite
+        string calldata productCode
     ) external onlyAdmin nonReentrant returns (uint256) {
         if (to == address(0)) revert InvalidInput("Invalid address");
         if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
-        if (bytes(activite).length == 0) revert InvalidInput("Activity missing");
         
         uint256 tokenId = _tokenIdCounter++;
         uint40 limitDate = uint40(block.timestamp + 18 * 30 days);
@@ -99,7 +102,6 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
             wallet: to,
             productCode: productCode,
             centerCode: DEFAULT_CENTER_CODE,
-            activite: activite,
             limitDate: limitDate,
             reservationDate: 0
         });
@@ -358,5 +360,47 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     function removeAdmin(address account) external {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert NotAuthorized();
         _revokeRole(ADMIN_ROLE, account);
+    }
+
+    /**
+     * @notice Sets the URI for a specific product code
+     * @param productCode Product code
+     * @param uri IPFS URI for the product image/metadata
+     */
+    function setProductCodeURI(string calldata productCode, string calldata uri) external onlyAdmin {
+        if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
+        _productCodeURIs[productCode] = uri;
+        emit ProductCodeURISet(productCode, uri);
+    }
+
+    /**
+     * @notice Gets the metadata URI for a specific token
+     * @param tokenId Token ID
+     * @return The metadata URI
+     */
+    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+        _requireOwned(tokenId);
+        
+        TicketData storage ticket = tickets[tokenId];
+        string memory productCode = ticket.productCode;
+        
+        // Get the URI associated with the productCode
+        string memory uri = _productCodeURIs[productCode];
+        
+        // If no URI is defined for this productCode, use the base URI
+        if (bytes(uri).length == 0) {
+            return super.tokenURI(tokenId);
+        }
+        
+        return uri;
+    }
+
+    /**
+     * @notice Gets the URI associated with a product code
+     * @param productCode Product code
+     * @return The URI associated with the product code
+     */
+    function getProductCodeURI(string calldata productCode) external view returns (string memory) {
+        return _productCodeURIs[productCode];
     }
 }

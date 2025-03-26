@@ -30,18 +30,18 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await expect(
-        ticket.connect(userAccount1).createTicket(userAccount1.address, "PRODUCT1", "Test Activity")
+        ticket.connect(userAccount1).createTicket(userAccount1.address, "PRODUCT1")
       ).to.be.revertedWithCustomError(ticket, "NotAuthorized");
       
       await expect(
-        ticket.createTicket(userAccount1.address, "PRODUCT1", "Test Activity")
+        ticket.createTicket(userAccount1.address, "PRODUCT1")
       ).not.to.be.reverted;
     });
 
     it("Should lock a ticket correctly", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       const ticketData = await ticket.tickets(0);
@@ -52,7 +52,7 @@ describe("Ticket Contract", function () {
     it("Should unlock a ticket correctly", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       await ticket.unlockTicket(0, "CENTER1");
       
@@ -64,7 +64,7 @@ describe("Ticket Contract", function () {
     it("Should use a ticket correctly", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       await ticket.useTicket(0);
       
@@ -76,7 +76,7 @@ describe("Ticket Contract", function () {
       const { ticket } = await loadFixture(deployTicketFixture);
       
       await expect(
-        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", "Activity")
+        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1")
       ).to.be.revertedWithCustomError(ticket, "InvalidInput");
     });
 
@@ -84,15 +84,7 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await expect(
-        ticket.createTicket(userAccount1.address, "", "Activity")
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput");
-    });
-
-    it("Should reject creating ticket with empty activity description", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await expect(
-        ticket.createTicket(userAccount1.address, "PRODUCT1", "")
+        ticket.createTicket(userAccount1.address, "")
       ).to.be.revertedWithCustomError(ticket, "InvalidInput");
     });
   });
@@ -101,7 +93,7 @@ describe("Ticket Contract", function () {
     it("Should prevent marking an already expired ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.setExpired(0);
       
       await expect(
@@ -112,7 +104,7 @@ describe("Ticket Contract", function () {
     it("Should auto-expire a ticket when limit date is reached", async function() {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity1");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       let ticketData = await ticket.tickets(0);
       const limitDate = Number(ticketData.limitDate);
@@ -130,7 +122,7 @@ describe("Ticket Contract", function () {
     it("Should reject setting reservation date in the past", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       const now = Math.floor(Date.now() / 1000);
@@ -154,7 +146,7 @@ describe("Ticket Contract", function () {
     it("Should reject putting ticket for sale by non-owner", async function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       await expect(
         ticket.connect(userAccount2).putForSale(0)
@@ -174,7 +166,7 @@ describe("Ticket Contract", function () {
     it("Should reject locking with an empty center code", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       await expect(
         ticket.lockTicket(0, "")
@@ -184,7 +176,7 @@ describe("Ticket Contract", function () {
     it("Should reject locking a non-AVAILABLE ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       await expect(
@@ -195,7 +187,7 @@ describe("Ticket Contract", function () {
     it("Should reject unlocking with an empty center code", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       await expect(
@@ -206,7 +198,7 @@ describe("Ticket Contract", function () {
     it("Should reject unlocking with a different center", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       await expect(
@@ -217,7 +209,7 @@ describe("Ticket Contract", function () {
     it("Should reject unlocking a non-LOCKED ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       await expect(
         ticket.unlockTicket(0, "CENTER1")
@@ -227,7 +219,7 @@ describe("Ticket Contract", function () {
     it("Should reject using a non-LOCKED ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       await expect(
         ticket.useTicket(0)
@@ -237,7 +229,7 @@ describe("Ticket Contract", function () {
     it("Should reject operations on expired tickets", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       const now = Math.floor(Date.now() / 1000);
       const limitDate = now + 100;
@@ -272,7 +264,7 @@ describe("Ticket Contract", function () {
     it("Should cover reservation date after limit date case", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       const now = Math.floor(Date.now() / 1000);
@@ -288,7 +280,7 @@ describe("Ticket Contract", function () {
     it("Should cover limit date before reservation date case", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       const now = Math.floor(Date.now() / 1000);
@@ -307,7 +299,7 @@ describe("Ticket Contract", function () {
     it("Should cover setReservationDate with different ticket states", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       const future = Math.floor(Date.now() / 1000) + 3600;
       await expect(
@@ -337,7 +329,7 @@ describe("Ticket Contract", function () {
     it("Should cover setting limit date in the past", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       const past = Math.floor(Date.now() / 1000) - 100;
       await expect(
@@ -349,7 +341,7 @@ describe("Ticket Contract", function () {
     it("Should test all branches of buyTicket function", async function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity1");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.connect(userAccount1).putForSale(0);
       
       await expect(ticket.connect(userAccount1).buyTicket(0))
@@ -367,10 +359,10 @@ describe("Ticket Contract", function () {
     it("Should cover checkAndUpdateExpiration branches", async function() {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity1");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.setExpired(0);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", "Activity2");
+      await ticket.createTicket(userAccount1.address, "PRODUCT2");
       
       const stateBefore = await ticket.tickets(0);
       expect(stateBefore.status).to.equal(4); // EXPIRED
@@ -393,7 +385,7 @@ describe("Ticket Contract", function () {
     it("Should test putForSale for an AVAILABLE ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.connect(userAccount1).putForSale(0);
       
       const ticketData = await ticket.tickets(0);
@@ -403,7 +395,7 @@ describe("Ticket Contract", function () {
     it("Should test putForSale for a COLLECTOR ticket", async function () {
       const { ticket, userAccount1, owner } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       await ticket.useTicket(0);
       
@@ -416,7 +408,7 @@ describe("Ticket Contract", function () {
     it("Should test putForSale for a LOCKED ticket (should fail)", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.lockTicket(0, "CENTER1");
       
       await expect(
@@ -427,7 +419,7 @@ describe("Ticket Contract", function () {
     it("Should transfer ownership correctly through buying a ticket", async function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.connect(userAccount1).putForSale(0);
       
       await ticket.connect(userAccount2).buyTicket(0);
@@ -443,7 +435,7 @@ describe("Ticket Contract", function () {
     it("Should check approval mechanisms for ticket operations", async function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.connect(userAccount1).approve(userAccount2.address, 0);
       
       await ticket.connect(userAccount2).putForSale(0);
@@ -455,12 +447,12 @@ describe("Ticket Contract", function () {
     it("Should test _isApprovedOrOwner internal function branches", async function () {
       const { ticket, userAccount1, userAccount2, userAccount3 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       await ticket.connect(userAccount1).approve(userAccount2.address, 0);
       
       await ticket.connect(userAccount2).putForSale(0);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", "Activity2");
+      await ticket.createTicket(userAccount1.address, "PRODUCT2");
       await ticket.connect(userAccount1).setApprovalForAll(userAccount3.address, true);
       
       await ticket.connect(userAccount3).putForSale(1);
@@ -469,7 +461,7 @@ describe("Ticket Contract", function () {
     it("Should test ERC721 functionalities", async function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       await ticket.connect(userAccount1).transferFrom(userAccount1.address, userAccount2.address, 0);
       expect(await ticket.ownerOf(0)).to.equal(userAccount2.address);
@@ -485,24 +477,20 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await expect(
-        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", "Activity")
+        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1")
       ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Invalid address");
       
       await expect(
-        ticket.createTicket(userAccount1.address, "", "Activity")
+        ticket.createTicket(userAccount1.address, "")
       ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Product missing");
-      
-      await expect(
-        ticket.createTicket(userAccount1.address, "PRODUCT1", "")
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Activity missing");
     });
 
     it("Should verify the ticket token counter increments correctly", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity1");
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", "Activity2");
-      await ticket.createTicket(userAccount1.address, "PRODUCT3", "Activity3");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
+      await ticket.createTicket(userAccount1.address, "PRODUCT2");
+      await ticket.createTicket(userAccount1.address, "PRODUCT3");
       
       expect(await ticket.ownerOf(0)).to.equal(userAccount1.address);
       expect(await ticket.ownerOf(1)).to.equal(userAccount1.address);
@@ -521,7 +509,7 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
       await expect(
-        ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity")
+        ticket.createTicket(userAccount1.address, "PRODUCT1")
       ).to.emit(ticket, "TicketCreated")
         .withArgs(0, userAccount1.address, "PRODUCT1");
       
@@ -542,7 +530,7 @@ describe("Ticket Contract", function () {
       ).to.emit(ticket, "TicketUsed")
         .withArgs(0);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", "Activity");
+      await ticket.createTicket(userAccount1.address, "PRODUCT2");
       
       await expect(
         ticket.connect(userAccount1).putForSale(1)
@@ -564,10 +552,10 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       // Create tickets for different tests
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity1"); // tokenId 0
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", "Activity2"); // tokenId 1
-      await ticket.createTicket(userAccount1.address, "PRODUCT3", "Activity3"); // tokenId 2
-      await ticket.createTicket(userAccount1.address, "PRODUCT4", "Activity4"); // tokenId 3
+      await ticket.createTicket(userAccount1.address, "PRODUCT1"); // tokenId 0
+      await ticket.createTicket(userAccount1.address, "PRODUCT2"); // tokenId 1
+      await ticket.createTicket(userAccount1.address, "PRODUCT3"); // tokenId 2
+      await ticket.createTicket(userAccount1.address, "PRODUCT4"); // tokenId 3
       
       // Test with LOCKED status (NFTStatus.LOCKED = 1)
       await ticket.lockTicket(0, "CENTER1");
@@ -602,7 +590,7 @@ describe("Ticket Contract", function () {
     it("Should exhaustively test checkAndUpdateExpiration", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", "Activity1");
+      await ticket.createTicket(userAccount1.address, "PRODUCT1");
       
       // Case 1: Ticket not expired and limit date not reached - should return false
       const tx1 = await ticket.checkAndUpdateExpiration(0);
@@ -616,7 +604,7 @@ describe("Ticket Contract", function () {
       expect(receipt2.logs.length).to.equal(0);
       
       // Case 3: Ticket not expired but limit date reached - should return true
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", "Activity2");
+      await ticket.createTicket(userAccount1.address, "PRODUCT2");
       
       const blockNumBefore = await ethers.provider.getBlockNumber();
       const blockBefore = await ethers.provider.getBlock(blockNumBefore);
@@ -682,11 +670,81 @@ describe("Ticket Contract", function () {
       
       // Try creating a ticket with the new admin
       await expect(
-        ticket.connect(userAccount1).createTicket(userAccount2.address, "PRODUCT1", "Activity")
+        ticket.connect(userAccount1).createTicket(userAccount2.address, "PRODUCT1")
       ).not.to.be.reverted;
       
       // Verify the ticket was created
       expect(await ticket.ownerOf(0)).to.equal(userAccount2.address);
+    });
+  });
+
+  describe("Metadata and Image Management", function () {
+    it("Should allow setting URI for a product code", async function () {
+      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
+      const productCode = "PRODUCT1";
+      const ipfsURI = "ipfs://QmTest123456/image.jpg";
+      
+      // Vérifier que l'URI n'est pas défini par défaut
+      expect(await ticket.getProductCodeURI(productCode)).to.equal("");
+      
+      // Définir l'URI pour le productCode
+      await expect(ticket.setProductCodeURI(productCode, ipfsURI))
+        .to.emit(ticket, "ProductCodeURISet")
+        .withArgs(productCode, ipfsURI);
+      
+      // Vérifier que l'URI a été correctement défini
+      expect(await ticket.getProductCodeURI(productCode)).to.equal(ipfsURI);
+    });
+    
+    it("Should reject setting URI for empty product code", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      const ipfsURI = "ipfs://QmTest123456/image.jpg";
+      
+      // Tentative de définir l'URI avec un productCode vide
+      await expect(ticket.setProductCodeURI("", ipfsURI))
+        .to.be.revertedWithCustomError(ticket, "InvalidInput");
+    });
+    
+    it("Should return correct tokenURI based on product code", async function () {
+      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
+      const productCode = "PRODUCT1";
+      const ipfsURI = "ipfs://QmTest123456/image.jpg";
+      
+      // Créer un ticket avec ce productCode
+      await ticket.createTicket(userAccount1.address, productCode);
+      const tokenId = 0; // Premier token créé
+      
+      // Définir l'URI pour le productCode
+      await ticket.setProductCodeURI(productCode, ipfsURI);
+      
+      // Vérifier que le tokenURI renvoie l'URI du productCode
+      expect(await ticket.tokenURI(tokenId)).to.equal(ipfsURI);
+    });
+    
+    it("Should use default URI when product code has no URI set", async function () {
+      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
+      const productCode = "PRODUCT2";
+      
+      // Créer un ticket avec ce productCode
+      await ticket.createTicket(userAccount1.address, productCode);
+      const tokenId = 0; // Premier token créé
+      
+      // Vérifier que le tokenURI renvoie l'URI par défaut (baseURI + tokenId)
+      // Note: Par défaut dans ERC721, c'est une chaîne vide
+      expect(await ticket.tokenURI(tokenId)).to.equal("");
+    });
+    
+    it("Should allow only admin to set product code URI", async function () {
+      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
+      const productCode = "PRODUCT1";
+      const ipfsURI = "ipfs://QmTest123456/image.jpg";
+      
+      // Tentative de définir l'URI avec un compte non-admin
+      await expect(ticket.connect(userAccount1).setProductCodeURI(productCode, ipfsURI))
+        .to.be.revertedWithCustomError(ticket, "NotAuthorized");
+        
+      // L'admin peut définir l'URI
+      await expect(ticket.setProductCodeURI(productCode, ipfsURI)).not.to.be.reverted;
     });
   });
 });
