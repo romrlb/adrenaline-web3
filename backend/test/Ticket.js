@@ -15,19 +15,23 @@ describe("Ticket Contract", function () {
   }
 
   describe("Deployment", function () {
-    it("Should set the right owner", async function () {
+    it("Should set the deployer as admin role holder", async function () {
       const { ticket, owner } = await loadFixture(deployTicketFixture);
-      expect(await ticket.owner()).to.equal(owner.address);
+      const ADMIN_ROLE = await ticket.ADMIN_ROLE();
+      const DEFAULT_ADMIN_ROLE = await ticket.DEFAULT_ADMIN_ROLE();
+      
+      expect(await ticket.hasRole(ADMIN_ROLE, owner.address)).to.be.true;
+      expect(await ticket.hasRole(DEFAULT_ADMIN_ROLE, owner.address)).to.be.true;
     });
   });
 
   describe("Ticket Creation and Management", function () {
-    it("Should only allow owner to create tickets", async function () {
+    it("Should only allow admin to create tickets", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await expect(
         ticket.connect(userAccount1).createTicket(userAccount1.address, "PRODUCT1", "Test Activity")
-      ).to.be.reverted;
+      ).to.be.revertedWithCustomError(ticket, "NotAuthorized");
       
       await expect(
         ticket.createTicket(userAccount1.address, "PRODUCT1", "Test Activity")
@@ -630,6 +634,59 @@ describe("Ticket Contract", function () {
       
       const updatedTicketInfo = await ticket.getTicketInfo(1);
       expect(updatedTicketInfo.status).to.equal(4); // EXPIRED status
+    });
+  });
+
+  describe("Role Management", function () {
+    it("Should allow DEFAULT_ADMIN to add new admin", async function () {
+      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
+      const ADMIN_ROLE = await ticket.ADMIN_ROLE();
+      
+      expect(await ticket.hasRole(ADMIN_ROLE, userAccount1.address)).to.be.false;
+      
+      await ticket.addAdmin(userAccount1.address);
+      
+      expect(await ticket.hasRole(ADMIN_ROLE, userAccount1.address)).to.be.true;
+    });
+    
+    it("Should allow DEFAULT_ADMIN to remove an admin", async function () {
+      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
+      const ADMIN_ROLE = await ticket.ADMIN_ROLE();
+      
+      await ticket.addAdmin(userAccount1.address);
+      expect(await ticket.hasRole(ADMIN_ROLE, userAccount1.address)).to.be.true;
+      
+      await ticket.removeAdmin(userAccount1.address);
+      expect(await ticket.hasRole(ADMIN_ROLE, userAccount1.address)).to.be.false;
+    });
+    
+    it("Should reject non-DEFAULT_ADMIN from managing admin roles", async function () {
+      const { ticket, owner, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
+      
+      // Give userAccount1 ADMIN_ROLE but not DEFAULT_ADMIN_ROLE
+      await ticket.addAdmin(userAccount1.address);
+      
+      await expect(
+        ticket.connect(userAccount1).addAdmin(userAccount2.address)
+      ).to.be.revertedWithCustomError(ticket, "NotAuthorized");
+      
+      await expect(
+        ticket.connect(userAccount1).removeAdmin(owner.address)
+      ).to.be.revertedWithCustomError(ticket, "NotAuthorized");
+    });
+    
+    it("Should allow new admin to perform admin operations", async function () {
+      const { ticket, owner, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.addAdmin(userAccount1.address);
+      
+      // Try creating a ticket with the new admin
+      await expect(
+        ticket.connect(userAccount1).createTicket(userAccount2.address, "PRODUCT1", "Activity")
+      ).not.to.be.reverted;
+      
+      // Verify the ticket was created
+      expect(await ticket.ownerOf(0)).to.equal(userAccount2.address);
     });
   });
 });

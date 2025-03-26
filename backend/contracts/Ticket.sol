@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
@@ -10,12 +10,16 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @dev Implementation of the Ticket contract
  * @notice This contract manages the lifecycle of ticket NFTs with different states
  */
-contract Ticket is ERC721, Ownable, ReentrancyGuard {
+contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     // Custom errors
     error InvalidId(uint256 tokenId);
     error InvalidState(uint256 tokenId, uint8 status);
     error InvalidInput(string reason);
     error DateError(uint256 date, string reason);
+    error NotAuthorized();
+
+    // Role definitions
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     enum NFTStatus {
         AVAILABLE,
@@ -58,7 +62,18 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor() ERC721("Adrenaline Ticket", "SKY") Ownable(msg.sender) {}
+    /**
+     * @notice Modifier to restrict function access to admins only
+     */
+    modifier onlyAdmin() {
+        if (!hasRole(ADMIN_ROLE, msg.sender)) revert NotAuthorized();
+        _;
+    }
+
+    constructor() ERC721("Adrenaline Ticket", "SKY") {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
+    }
 
     /**
      * @notice Creates a new ticket in AVAILABLE state
@@ -71,7 +86,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
         address to, 
         string calldata productCode, 
         string calldata activite
-    ) external onlyOwner nonReentrant returns (uint256) {
+    ) external onlyAdmin nonReentrant returns (uint256) {
         if (to == address(0)) revert InvalidInput("Invalid address");
         if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
         if (bytes(activite).length == 0) revert InvalidInput("Activity missing");
@@ -122,7 +137,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @param tokenId ID of the ticket to check
      * @return bool True if the ticket was updated to expired, false otherwise
      */
-    function checkAndUpdateExpiration(uint256 tokenId) public onlyOwner nonReentrant ticketExists(tokenId) returns (bool) {
+    function checkAndUpdateExpiration(uint256 tokenId) public onlyAdmin nonReentrant ticketExists(tokenId) returns (bool) {
         TicketData storage ticket = tickets[tokenId];
         
         if (NFTStatus.EXPIRED == ticket.status) {
@@ -143,7 +158,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @param tokenId ID of the ticket to lock
      * @param centerCode Code of the center making the reservation
      */
-    function lockTicket(uint256 tokenId, string calldata centerCode) external onlyOwner nonReentrant ticketExists(tokenId) {
+    function lockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin nonReentrant ticketExists(tokenId) {
         if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
@@ -164,7 +179,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @param tokenId ID of the ticket to unlock
      * @param centerCode Code of the center requesting the unlock
      */
-    function unlockTicket(uint256 tokenId, string calldata centerCode) external onlyOwner nonReentrant ticketExists(tokenId) {
+    function unlockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin nonReentrant ticketExists(tokenId) {
         if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
@@ -186,7 +201,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @notice Marks a ticket as used (becomes a collector)
      * @param tokenId ID of the ticket to use
      */
-    function useTicket(uint256 tokenId) external onlyOwner nonReentrant ticketExists(tokenId) {
+    function useTicket(uint256 tokenId) external onlyAdmin nonReentrant ticketExists(tokenId) {
         if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
@@ -255,7 +270,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @param tokenId ID of the ticket
      * @param newReservationDate New reservation date (unix timestamp)
      */
-    function setReservationDate(uint256 tokenId, uint256 newReservationDate) external onlyOwner nonReentrant ticketExists(tokenId) {
+    function setReservationDate(uint256 tokenId, uint256 newReservationDate) external onlyAdmin nonReentrant ticketExists(tokenId) {
         TicketData storage ticket = tickets[tokenId];
         
         if (NFTStatus.LOCKED != ticket.status) 
@@ -275,7 +290,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @param tokenId ID of the ticket
      * @param newLimitDate New limit date (unix timestamp)
      */
-    function setLimitDate(uint256 tokenId, uint256 newLimitDate) external onlyOwner nonReentrant ticketExists(tokenId) {
+    function setLimitDate(uint256 tokenId, uint256 newLimitDate) external onlyAdmin nonReentrant ticketExists(tokenId) {
         if (newLimitDate <= block.timestamp) 
             revert DateError(newLimitDate, "In past");
         
@@ -290,7 +305,7 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
      * @notice Marks a ticket as expired
      * @param tokenId ID of the ticket to mark as expired
      */
-    function setExpired(uint256 tokenId) external onlyOwner nonReentrant ticketExists(tokenId) {
+    function setExpired(uint256 tokenId) external onlyAdmin nonReentrant ticketExists(tokenId) {
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.EXPIRED == ticket.status) 
             revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
@@ -298,5 +313,50 @@ contract Ticket is ERC721, Ownable, ReentrancyGuard {
         ticket.status = NFTStatus.EXPIRED;
         
         emit TicketExpired(tokenId);
+    }
+
+    /**
+     * @notice Updates wallet address when token is transferred
+     * @dev Internal function to keep ticket.wallet field updated on transfers
+     */
+    function _update(
+        address to,
+        uint256 tokenId,
+        address auth
+    ) internal virtual override returns (address) {
+        address from = super._update(to, tokenId, auth);
+        
+        // Skip if it's a mint (from == 0)
+        if (from != address(0)) {
+            TicketData storage ticket = tickets[tokenId];
+            ticket.wallet = to;
+        }
+        
+        return from;
+    }
+    
+    /**
+     * @dev Override the supportsInterface function to include the ERC165 interface for AccessControl
+     */
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, AccessControl) returns (bool) {
+        return super.supportsInterface(interfaceId);
+    }
+
+    /**
+     * @notice Add an admin to the contract
+     * @param account Address to grant admin role
+     */
+    function addAdmin(address account) external {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert NotAuthorized();
+        _grantRole(ADMIN_ROLE, account);
+    }
+    
+    /**
+     * @notice Remove an admin from the contract
+     * @param account Address to revoke admin role
+     */
+    function removeAdmin(address account) external {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert NotAuthorized();
+        _revokeRole(ADMIN_ROLE, account);
     }
 }
