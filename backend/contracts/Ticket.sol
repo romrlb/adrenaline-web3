@@ -14,7 +14,6 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     using Strings for uint256;
 
-    // Custom errors
     error InvalidId(uint256 tokenId);
     error InvalidState(uint256 tokenId, uint8 status);
     error InvalidInput(string reason);
@@ -37,14 +36,18 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         address wallet;
         string productCode;
         string centerCode;
+        uint256 price;
         uint40 limitDate;
         uint40 reservationDate; 
     }
 
     mapping(uint256 => TicketData) public tickets;
     
-    // Mapping associant productCode à son URI IPFS
+    // Mapping from productCode to its IPFS URI
     mapping(string => string) private _productCodeURIs;
+    
+    // Mapping from tokenId to its specific IPFS URI (for VIP tickets, etc.)
+    mapping(uint256 => string) private _tokenURIs;
     
     uint256 private _tokenIdCounter;
     
@@ -58,6 +61,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     event TicketSold(uint256 indexed tokenId, address indexed newOwner);
     event TicketExpired(uint256 indexed tokenId);
     event ProductCodeURISet(string productCode, string uri);
+    event TokenURISet(uint256 indexed tokenId, string uri);
 
     /**
      * @notice Modifier to check if a ticket exists
@@ -89,7 +93,8 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      */
     function createTicket(
         address to, 
-        string calldata productCode
+        string calldata productCode,
+        uint256 price
     ) external onlyAdmin nonReentrant returns (uint256) {
         if (to == address(0)) revert InvalidInput("Invalid address");
         if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
@@ -102,6 +107,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
             wallet: to,
             productCode: productCode,
             centerCode: DEFAULT_CENTER_CODE,
+            price: price,
             limitDate: limitDate,
             reservationDate: 0
         });
@@ -121,6 +127,19 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
         address owner = _ownerOf(tokenId);
         return (spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender);
+    }
+    
+    /**
+     * @notice Public wrapper around _isApprovedOrOwner for testing purposes
+     * @param spender Address to check
+     * @param tokenId ID of the token
+     * @return bool True if the address is approved or owner
+     */
+    function isApprovedOrOwner(address spender, uint256 tokenId) public view ticketExists(tokenId) returns (bool) {
+        // First check for null address to cover all branches
+        if (spender == address(0)) return false;
+        
+        return _isApprovedOrOwner(spender, tokenId);
     }
     
     /**
@@ -213,49 +232,6 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         ticket.status = NFTStatus.COLLECTOR;
         
         emit TicketUsed(tokenId);
-    }
-    
-    /**
-     * @notice Puts a ticket for sale on the marketplace
-     * @param tokenId ID of the ticket to put for sale
-     */
-    function putForSale(uint256 tokenId) external nonReentrant ticketExists(tokenId) {
-        if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
-        
-        if (!_isApprovedOrOwner(msg.sender, tokenId)) revert InvalidInput("Not authorized");
-        
-        TicketData storage ticket = tickets[tokenId];
-        
-        if (ticket.status != NFTStatus.AVAILABLE && ticket.status != NFTStatus.COLLECTOR)
-            revert InvalidState(tokenId, uint8(ticket.status));
-        
-        ticket.status = NFTStatus.ON_SALE;
-        
-        emit TicketForSale(tokenId);
-    }
-    
-    /**
-     * @notice Allows buying a ticket from the marketplace
-     * @param tokenId ID of the ticket to buy
-     */
-    function buyTicket(uint256 tokenId) external nonReentrant ticketExists(tokenId) {
-        if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
-        
-        TicketData storage ticket = tickets[tokenId];
-        if (NFTStatus.ON_SALE != ticket.status) 
-            revert InvalidState(tokenId, uint8(ticket.status));
-            
-        if (msg.sender == ownerOf(tokenId)) revert InvalidInput("Self purchase");
-        
-        address previousOwner = ownerOf(tokenId);
-        
-        ticket.status = NFTStatus.AVAILABLE;
-        ticket.wallet = msg.sender;
-        ticket.centerCode = DEFAULT_CENTER_CODE;
-        
-        _transfer(previousOwner, msg.sender, tokenId);
-        
-        emit TicketSold(tokenId, msg.sender);
     }
     
     /**
@@ -374,6 +350,25 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @notice Sets a specific URI for a token (overrides product code URI)
+     * @param tokenId ID of the token
+     * @param uri New URI for the token
+     */
+    function setTokenURI(uint256 tokenId, string calldata uri) external onlyAdmin ticketExists(tokenId) {
+        _tokenURIs[tokenId] = uri;
+        emit TokenURISet(tokenId, uri);
+    }
+
+    /**
+     * @notice Gets the specific URI for a token if it exists
+     * @param tokenId Token ID
+     * @return The specific URI for the token, or empty string if not set
+     */
+    function getTokenURI(uint256 tokenId) external view ticketExists(tokenId) returns (string memory) {
+        return _tokenURIs[tokenId];
+    }
+
+    /**
      * @notice Gets the metadata URI for a specific token
      * @param tokenId Token ID
      * @return The metadata URI
@@ -381,6 +376,13 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
         _requireOwned(tokenId);
         
+        // Check if there's a specific URI for this token
+        string memory specificUri = _tokenURIs[tokenId];
+        if (bytes(specificUri).length > 0) {
+            return specificUri;
+        }
+        
+        // If no specific URI, fall back to product code URI
         TicketData storage ticket = tickets[tokenId];
         string memory productCode = ticket.productCode;
         
