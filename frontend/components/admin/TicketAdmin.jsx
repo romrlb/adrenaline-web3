@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { ReloadIcon, Pencil2Icon, LockClosedIcon, LockOpen2Icon, StarIcon, PlusIcon } from "@radix-ui/react-icons";
 import { parseEther, formatEther } from 'viem';
 import { publicClient } from '@/utils/client'
-import { hardhat } from 'viem/chains';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DialogTrigger, DialogTitle, DialogDescription, DialogHeader, DialogFooter, DialogContent, Dialog } from "@/components/ui/dialog";
 
@@ -51,43 +50,6 @@ export default function TicketAdmin() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [actionDialog, setActionDialog] = useState(null);
 
-  // Watch for TicketCreated events
-  useWatchContractEvent({
-    address: ADRENALINE_CONTRACT_ADDRESS,
-    abi: ADRENALINE_CONTRACT_ABI,
-    eventName: 'TicketCreated',
-    fromBlock: process.env.NEXT_PUBLIC_FROM_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_FROM_BLOCK)
-    : 0n,
-    toBlock: 'latest',
-    onLogs(logs) {
-      console.log("Ticket created event:", logs);
-      logs.forEach(log => {
-        const tokenId = Number(log.args.tokenId);
-        if (tokenId >= nextId) {
-          setNextId(tokenId + 1);
-        }
-      });
-    },
-  });
-
-  // Load tickets only on initial component load
-  useEffect(() => {
-    if (isConnected && walletClient && !hasInitiallyLoaded.current) {
-      hasInitiallyLoaded.current = true;
-      fetchTickets();
-    }
-  }, [isConnected, walletClient]);
-
-  // Function to manually trigger token refresh
-  const handleRefreshTokens = () => {
-    fetchTickets();
-    toast.success('Rafraîchissement des tickets en cours...', {
-      description: 'Cette opération peut prendre quelques secondes.',
-      duration: 3000,
-    });
-  };
-
   // Function to fetch tickets directly from the blockchain
   const fetchTickets = async () => {
     try {
@@ -99,7 +61,7 @@ export default function TicketAdmin() {
       let tokenId = 0;
       let consecutiveFailures = 0;
       const maxConsecutiveFailures = 3; // Stop after 3 consecutive failures
-      const maxTokensToCheck = 50; // Maxim um limit to avoid infinite loop
+      const maxTokensToCheck = 50; // Maximum limit to avoid infinite loop
       
       while (tokenId < maxTokensToCheck && consecutiveFailures < maxConsecutiveFailures) {
         try {
@@ -111,7 +73,7 @@ export default function TicketAdmin() {
             args: [tokenId]
           });
           
-            // Si nous arrivons ici sans erreur, le ticket existe
+          // Si nous arrivons ici sans erreur, le ticket existe
           console.log(`Found ticket ${tokenId}`);
           
           // Check if the wallet is valid
@@ -155,16 +117,53 @@ export default function TicketAdmin() {
       setIsLoading(false);
     }
   };
+
+  // Function to manually trigger token refresh
+  const handleRefreshTokens = () => {
+    fetchTickets();
+    toast.success('Rafraîchissement des tickets en cours...', {
+      description: 'Cette opération peut prendre quelques secondes.',
+      duration: 3000,
+    });
+  };
+
+  // Watch for TicketCreated events
+  useWatchContractEvent({
+    address: ADRENALINE_CONTRACT_ADDRESS,
+    abi: ADRENALINE_CONTRACT_ABI,
+    eventName: 'TicketCreated',
+    fromBlock: process.env.NEXT_PUBLIC_FROM_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_FROM_BLOCK)
+    : 0n,
+    toBlock: 'latest',
+    onLogs(logs) {
+      console.log("Ticket created event:", logs);
+      logs.forEach(log => {
+        const tokenId = Number(log.args.tokenId);
+        if (tokenId >= nextId) {
+          setNextId(tokenId + 1);
+        }
+      });
+    },
+  });
+
+  // Load tickets only on initial component load
+  useEffect(() => {
+    if (isConnected && walletClient && !hasInitiallyLoaded.current) {
+      hasInitiallyLoaded.current = true;
+      fetchTickets();
+    }
+  }, [isConnected, walletClient]); // fetchTickets removed from dependencies to avoid the circular reference
   
   const getStatusInfo = (status) => {
     const statusMap = {
-      0: { text: 'Disponible', color: 'bg-green-100 text-green-800' },
-      1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800' },
-      2: { text: 'En vente', color: 'bg-blue-100 text-blue-800' },
-      3: { text: 'Collector', color: 'bg-purple-100 text-purple-800' },
-      4: { text: 'Expiré', color: 'bg-red-100 text-red-800' }
+      0: { text: 'Disponible', color: 'bg-green-100 text-green-800 border-green-200' },
+      1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+      2: { text: 'En vente', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+      3: { text: 'Collector', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+      4: { text: 'Expiré', color: 'bg-red-100 text-red-800 border-red-200' }
     };
-    return statusMap[status] || { text: 'Inconnu', color: 'bg-gray-100 text-gray-800' };
+    return statusMap[status] || { text: 'Inconnu', color: 'bg-gray-100 text-gray-800 border-gray-200' };
   };
   
   const handleMintTicket = async (e) => {
@@ -181,7 +180,7 @@ export default function TicketAdmin() {
       
       // Validate wallet address format
       if (!wallet.startsWith('0x') || wallet.length !== 42) {
-        toast.error('L\'adresse du portefeuille est invalide');
+        toast.error('L&apos;adresse du portefeuille est invalide');
         return;
       }
       
@@ -232,7 +231,7 @@ export default function TicketAdmin() {
   };
 
   const handleLockTicket = async (tokenId, centerCode) => {
-    if (!tokenId || !centerCode) {
+    if (tokenId === undefined || tokenId === null || centerCode === undefined || centerCode === '') {
       toast.error('ID du ticket et code du centre sont requis');
       return;
     }
@@ -265,7 +264,7 @@ export default function TicketAdmin() {
   };
 
   const handleUnlockTicket = async (tokenId, centerCode) => {
-    if (!tokenId || !centerCode) {
+    if (tokenId === undefined || tokenId === null || centerCode === undefined || centerCode === '') {
       toast.error('ID du ticket et code du centre sont requis');
       return;
     }
@@ -298,7 +297,7 @@ export default function TicketAdmin() {
   };
 
   const handleUseTicket = async (tokenId) => {
-    if (!tokenId) {
+    if (tokenId === undefined || tokenId === null) {
       toast.error('ID du ticket est requis');
       return;
     }
@@ -313,7 +312,7 @@ export default function TicketAdmin() {
         args: [BigInt(tokenId)]
       });
       
-      toast.success(`Ticket #${tokenId} en cours d'utilisation (passage en collectionneur)`, {
+      toast.success(`Ticket #${tokenId} en cours d'utilisation (passage en collector)`, {
         description: `Transaction: ${hash.substring(0, 8)}...${hash.substring(hash.length - 6)}`
       });
       
@@ -331,6 +330,11 @@ export default function TicketAdmin() {
   };
 
   const openActionDialog = (action, ticket) => {
+    if (!ticket || ticket.id === undefined || ticket.id === null) {
+      toast.error('Ticket invalide');
+      return;
+    }
+    
     setSelectedTicket(ticket);
     setActionDialog(action);
     
@@ -408,7 +412,7 @@ export default function TicketAdmin() {
                                 <CardTitle className="text-lg">Ticket #{ticket.id}</CardTitle>
                                 <CardDescription>{ticket.productCode}</CardDescription>
                               </div>
-                              <Badge className={status.color}>
+                              <Badge variant="outline" className={status.color}>
                                 {status.text}
                               </Badge>
                             </div>
@@ -444,7 +448,7 @@ export default function TicketAdmin() {
                                 <Button size="icon" variant="ghost" title="Déverrouiller" onClick={() => openActionDialog('unlock', ticket)}>
                                   <LockOpen2Icon className="h-4 w-4" />
                                 </Button>
-                                <Button size="icon" variant="ghost" title="Utiliser (mode collectionneur)" onClick={() => openActionDialog('use', ticket)}>
+                                <Button size="icon" variant="ghost" title="Utiliser (passage du ticket en collector)" onClick={() => openActionDialog('use', ticket)}>
                                   <StarIcon className="h-4 w-4" />
                                 </Button>
                               </>
@@ -558,8 +562,14 @@ export default function TicketAdmin() {
             <Button
               type="button"
               variant="default"
-              onClick={() => handleLockTicket(lockForm.tokenId, lockForm.centerCode)}
-              disabled={isLocking || !lockForm.centerCode}
+              onClick={() => {
+                if ((lockForm.tokenId === '0' || lockForm.tokenId) && lockForm.centerCode) {
+                  handleLockTicket(lockForm.tokenId, lockForm.centerCode);
+                } else {
+                  toast.error('ID du ticket et code du centre sont requis');
+                }
+              }}
+              disabled={isLocking || lockForm.centerCode === undefined || lockForm.centerCode === ''}
             >
               {isLocking ? (
                 <>
@@ -599,7 +609,7 @@ export default function TicketAdmin() {
                 placeholder="000001"
               />
               <p className="text-sm text-gray-500">
-                Confirmez le code du centre pour déverrouiller ce ticket. Le code doit correspondre au centre qui l'a verrouillé.
+                Confirmez le code du centre pour déverrouiller ce ticket. Le code doit correspondre au centre qui l&apos;a verrouillé.
               </p>
             </div>
           </div>
@@ -607,8 +617,14 @@ export default function TicketAdmin() {
             <Button
               type="button"
               variant="default"
-              onClick={() => handleUnlockTicket(unlockForm.tokenId, unlockForm.centerCode)}
-              disabled={isUnlocking || !unlockForm.centerCode}
+              onClick={() => {
+                if ((unlockForm.tokenId === '0' || unlockForm.tokenId) && unlockForm.centerCode) {
+                  handleUnlockTicket(unlockForm.tokenId, unlockForm.centerCode);
+                } else {
+                  toast.error('ID du ticket et code du centre sont requis');
+                }
+              }}
+              disabled={isUnlocking || unlockForm.centerCode === undefined || unlockForm.centerCode === ''}
             >
               {isUnlocking ? (
                 <>
@@ -653,8 +669,14 @@ export default function TicketAdmin() {
             <Button
               type="button"
               variant="default"
-              onClick={() => handleUseTicket(selectedTicket?.id)}
-              disabled={isCollecting}
+              onClick={() => {
+                if (selectedTicket && (selectedTicket.id === 0 || selectedTicket.id)) {
+                  handleUseTicket(selectedTicket.id);
+                } else {
+                  toast.error('Ticket invalide');
+                }
+              }}
+              disabled={isCollecting || selectedTicket === null || selectedTicket === undefined}
             >
               {isCollecting ? (
                 <>
