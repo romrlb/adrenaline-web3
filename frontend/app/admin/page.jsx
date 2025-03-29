@@ -16,10 +16,10 @@ export default function AdminPage() {
           <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-4">Connexion requise</h1>
           <p className="mb-6 text-gray-700">
-            Vous devez être connecté à votre portefeuille pour accéder à l'administration.
+            Vous devez être connecté à votre portefeuille pour accéder à l&apos;administration.
           </p>
           <Link href="/">
-            <Button>Retour à l'accueil</Button>
+            <Button>Retour à l&apos;accueil</Button>
           </Link>
         </div>
       </div>

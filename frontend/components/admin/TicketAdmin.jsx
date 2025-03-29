@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useAccount, useWalletClient, useWatchContractEvent } from 'wagmi';
+import { useAccount, useWalletClient, useWatchContractEvent, useContractRead } from 'wagmi';
 import { ADRENALINE_CONTRACT_ADDRESS, ADRENALINE_CONTRACT_ABI } from '@/constants/contract';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { ReloadIcon, Pencil2Icon, LockClosedIcon, LockOpen2Icon, StarIcon, PlusIcon } from "@radix-ui/react-icons";
+import { ReloadIcon, Pencil2Icon, LockClosedIcon, LockOpen2Icon, StarIcon, PlusIcon, ExternalLinkIcon } from "@radix-ui/react-icons";
 import { parseEther, formatEther } from 'viem';
 import { publicClient } from '@/utils/client'
-import { hardhat } from 'viem/chains';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DialogTrigger, DialogTitle, DialogDescription, DialogHeader, DialogFooter, DialogContent, Dialog } from "@/components/ui/dialog";
+import Image from 'next/image';
 
 const client = await publicClient
 
@@ -22,7 +22,9 @@ export default function TicketAdmin() {
   const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const [tickets, setTickets] = useState([]);
+  const [ticketMetadata, setTicketMetadata] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
   const [isLocking, setIsLocking] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
@@ -51,41 +53,123 @@ export default function TicketAdmin() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [actionDialog, setActionDialog] = useState(null);
 
-  // Watch for TicketCreated events
-  useWatchContractEvent({
-    address: ADRENALINE_CONTRACT_ADDRESS,
-    abi: ADRENALINE_CONTRACT_ABI,
-    eventName: 'TicketCreated',
-    fromBlock: process.env.NEXT_PUBLIC_FROM_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_FROM_BLOCK)
-    : 0n,
-    toBlock: 'latest',
-    onLogs(logs) {
-      console.log("Ticket created event:", logs);
-      logs.forEach(log => {
-        const tokenId = Number(log.args.tokenId);
-        if (tokenId >= nextId) {
-          setNextId(tokenId + 1);
-        }
+  // Function to fetch ticket URI
+  const fetchTicketURI = async (tokenId) => {
+    try {
+      // First try to get a specific token URI
+      let uri = await client.readContract({
+        address: ADRENALINE_CONTRACT_ADDRESS,
+        abi: ADRENALINE_CONTRACT_ABI,
+        functionName: 'getTokenURI',
+        args: [tokenId]
       });
-    },
-  });
-
-  // Load tickets only on initial component load
-  useEffect(() => {
-    if (isConnected && walletClient && !hasInitiallyLoaded.current) {
-      hasInitiallyLoaded.current = true;
-      fetchTickets();
+      
+      // If no specific URI, get the product code URI
+      if (!uri || uri === '') {
+        const ticketInfo = await client.readContract({
+          address: ADRENALINE_CONTRACT_ADDRESS,
+          abi: ADRENALINE_CONTRACT_ABI,
+          functionName: 'getTicketInfo',
+          args: [tokenId]
+        });
+        
+        if (ticketInfo && ticketInfo.productCode) {
+          uri = await client.readContract({
+            address: ADRENALINE_CONTRACT_ADDRESS,
+            abi: ADRENALINE_CONTRACT_ABI,
+            functionName: 'getProductCodeURI',
+            args: [ticketInfo.productCode]
+          });
+        }
+      }
+      
+      // If still no URI, try the tokenURI function (fallback to base)
+      if (!uri || uri === '') {
+        uri = await client.readContract({
+          address: ADRENALINE_CONTRACT_ADDRESS,
+          abi: ADRENALINE_CONTRACT_ABI,
+          functionName: 'tokenURI',
+          args: [tokenId]
+        });
+      }
+      
+      return uri;
+    } catch (error) {
+      console.error(`Error fetching URI for token ${tokenId}:`, error);
+      return null;
     }
-  }, [isConnected, walletClient]);
-
-  // Function to manually trigger token refresh
-  const handleRefreshTokens = () => {
-    fetchTickets();
-    toast.success('Rafraîchissement des tickets en cours...', {
-      description: 'Cette opération peut prendre quelques secondes.',
-      duration: 3000,
+  };
+  
+  // Function to fetch metadata from URI
+  const fetchMetadata = async (uri) => {
+    if (!uri) return null;
+    
+    try {
+      // Handle IPFS URIs
+      const url = uri.startsWith('ipfs://') 
+        ? `https://ipfs.io/ipfs/${uri.substring(7)}`
+        : uri;
+      
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const metadata = await response.json();
+      
+      // Process image URI if it's IPFS
+      if (metadata.image) {
+        // Handle IPFS URI
+        if (metadata.image.startsWith('ipfs://')) {
+          metadata.image = `https://ipfs.io/ipfs/${metadata.image.substring(7)}`;
+        }
+        // Handle IPFS CID directly (without protocol)
+        else if (metadata.image.startsWith('Qm') && !metadata.image.includes('/')) {
+          metadata.image = `https://ipfs.io/ipfs/${metadata.image}`;
+        }
+        // Handle other relative paths
+        else if (!metadata.image.startsWith('http') && !metadata.image.startsWith('/')) {
+          metadata.image = `/${metadata.image}`;
+        }
+      }
+      
+      return metadata;
+    } catch (error) {
+      console.error(`Error fetching metadata from ${uri}:`, error);
+      return null;
+    }
+  };
+  
+  // Load ticket metadata
+  const loadTicketMetadata = async (tickets) => {
+    if (!tickets || tickets.length === 0) return;
+    
+    setIsLoadingMetadata(true);
+    const metadataPromises = tickets.map(async (ticket) => {
+      try {
+        const uri = await fetchTicketURI(ticket.id);
+        if (uri) {
+          const metadata = await fetchMetadata(uri);
+          return { id: ticket.id, metadata, uri };
+        }
+      } catch (error) {
+        console.error(`Error loading metadata for ticket ${ticket.id}:`, error);
+      }
+      return { id: ticket.id, metadata: null, uri: null };
     });
+    
+    const metadataResults = await Promise.all(metadataPromises);
+    const newMetadata = {};
+    
+    metadataResults.forEach(result => {
+      if (result && result.metadata) {
+        newMetadata[result.id] = {
+          ...result.metadata,
+          uri: result.uri
+        };
+      }
+    });
+    
+    setTicketMetadata(newMetadata);
+    setIsLoadingMetadata(false);
   };
 
   // Function to fetch tickets directly from the blockchain
@@ -99,7 +183,7 @@ export default function TicketAdmin() {
       let tokenId = 0;
       let consecutiveFailures = 0;
       const maxConsecutiveFailures = 3; // Stop after 3 consecutive failures
-      const maxTokensToCheck = 50; // Maxim um limit to avoid infinite loop
+      const maxTokensToCheck = 50; // Maximum limit to avoid infinite loop
       
       while (tokenId < maxTokensToCheck && consecutiveFailures < maxConsecutiveFailures) {
         try {
@@ -111,7 +195,7 @@ export default function TicketAdmin() {
             args: [tokenId]
           });
           
-            // Si nous arrivons ici sans erreur, le ticket existe
+          // Si nous arrivons ici sans erreur, le ticket existe
           console.log(`Found ticket ${tokenId}`);
           
           // Check if the wallet is valid
@@ -145,6 +229,9 @@ export default function TicketAdmin() {
       console.log(`Found ${tempTickets.length} tickets`);
       setTickets(tempTickets);
       
+      // Load metadata for tickets
+      await loadTicketMetadata(tempTickets);
+      
       if (tempTickets.length === 0) {
         toast.info('Aucun ticket trouvé');
       }
@@ -155,16 +242,53 @@ export default function TicketAdmin() {
       setIsLoading(false);
     }
   };
+
+  // Function to manually trigger token refresh
+  const handleRefreshTokens = () => {
+    fetchTickets();
+    toast.success('Rafraîchissement des tickets en cours...', {
+      description: 'Cette opération peut prendre quelques secondes.',
+      duration: 3000,
+    });
+  };
+
+  // Watch for TicketCreated events
+  useWatchContractEvent({
+    address: ADRENALINE_CONTRACT_ADDRESS,
+    abi: ADRENALINE_CONTRACT_ABI,
+    eventName: 'TicketCreated',
+    fromBlock: process.env.NEXT_PUBLIC_FROM_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_FROM_BLOCK)
+    : 0n,
+    toBlock: 'latest',
+    onLogs(logs) {
+      console.log("Ticket created event:", logs);
+      logs.forEach(log => {
+        const tokenId = Number(log.args.tokenId);
+        if (tokenId >= nextId) {
+          setNextId(tokenId + 1);
+        }
+      });
+    },
+  });
+
+  // Load tickets only on initial component load
+  useEffect(() => {
+    if (isConnected && walletClient && !hasInitiallyLoaded.current) {
+      hasInitiallyLoaded.current = true;
+      fetchTickets();
+    }
+  }, [isConnected, walletClient]); // fetchTickets removed from dependencies to avoid the circular reference
   
   const getStatusInfo = (status) => {
     const statusMap = {
-      0: { text: 'Disponible', color: 'bg-green-100 text-green-800' },
-      1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800' },
-      2: { text: 'En vente', color: 'bg-blue-100 text-blue-800' },
-      3: { text: 'Collector', color: 'bg-purple-100 text-purple-800' },
-      4: { text: 'Expiré', color: 'bg-red-100 text-red-800' }
+      0: { text: 'Disponible', color: 'bg-green-100 text-green-800 border-green-200' },
+      1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+      2: { text: 'En vente', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+      3: { text: 'Collector', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+      4: { text: 'Expiré', color: 'bg-red-100 text-red-800 border-red-200' }
     };
-    return statusMap[status] || { text: 'Inconnu', color: 'bg-gray-100 text-gray-800' };
+    return statusMap[status] || { text: 'Inconnu', color: 'bg-gray-100 text-gray-800 border-gray-200' };
   };
   
   const handleMintTicket = async (e) => {
@@ -181,7 +305,7 @@ export default function TicketAdmin() {
       
       // Validate wallet address format
       if (!wallet.startsWith('0x') || wallet.length !== 42) {
-        toast.error('L\'adresse du portefeuille est invalide');
+        toast.error('L&apos;adresse du portefeuille est invalide');
         return;
       }
       
@@ -232,7 +356,7 @@ export default function TicketAdmin() {
   };
 
   const handleLockTicket = async (tokenId, centerCode) => {
-    if (!tokenId || !centerCode) {
+    if (tokenId === undefined || tokenId === null || centerCode === undefined || centerCode === '') {
       toast.error('ID du ticket et code du centre sont requis');
       return;
     }
@@ -265,7 +389,7 @@ export default function TicketAdmin() {
   };
 
   const handleUnlockTicket = async (tokenId, centerCode) => {
-    if (!tokenId || !centerCode) {
+    if (tokenId === undefined || tokenId === null || centerCode === undefined || centerCode === '') {
       toast.error('ID du ticket et code du centre sont requis');
       return;
     }
@@ -298,7 +422,7 @@ export default function TicketAdmin() {
   };
 
   const handleUseTicket = async (tokenId) => {
-    if (!tokenId) {
+    if (tokenId === undefined || tokenId === null) {
       toast.error('ID du ticket est requis');
       return;
     }
@@ -313,7 +437,7 @@ export default function TicketAdmin() {
         args: [BigInt(tokenId)]
       });
       
-      toast.success(`Ticket #${tokenId} en cours d'utilisation (passage en collectionneur)`, {
+      toast.success(`Ticket #${tokenId} en cours d'utilisation (passage en collector)`, {
         description: `Transaction: ${hash.substring(0, 8)}...${hash.substring(hash.length - 6)}`
       });
       
@@ -331,6 +455,11 @@ export default function TicketAdmin() {
   };
 
   const openActionDialog = (action, ticket) => {
+    if (!ticket || ticket.id === undefined || ticket.id === null) {
+      toast.error('Ticket invalide');
+      return;
+    }
+    
     setSelectedTicket(ticket);
     setActionDialog(action);
     
@@ -396,24 +525,58 @@ export default function TicketAdmin() {
                   <div className="mb-4 flex justify-between items-center">
                     <p className="text-sm text-gray-500">{tickets.length} ticket(s) trouvé(s)</p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                     {tickets.map((ticket) => {
                       const status = getStatusInfo(Number(ticket.status));
                       
                       return (
-                        <Card key={ticket.id} className="overflow-hidden border-2 border-gray-400 hover:border-gray-600 shadow-sm hover:shadow">
+                        <Card key={ticket.id} className="overflow-hidden border-2 border-gray-400 hover:border-gray-600 shadow-sm hover:shadow flex flex-col">
+                          {/* Image en haut de la carte avec une taille fixe carrée */}
+                          {ticketMetadata[ticket.id] && ticketMetadata[ticket.id].image && (
+                            <div className="relative w-full aspect-square">
+                              <Image 
+                                src={ticketMetadata[ticket.id].image}
+                                alt={ticketMetadata[ticket.id].name || `Ticket #${ticket.id}`}
+                                fill
+                                style={{ objectFit: 'cover' }}
+                                className="transition-all hover:scale-105"
+                                unoptimized={ticketMetadata[ticket.id].image.startsWith('https://ipfs.io/')}
+                              />
+                              {/* Badge de statut superposé sur l'image */}
+                              <div className="absolute top-3 right-3">
+                                <Badge variant="outline" className={`${status.color} shadow-sm`}>
+                                  {status.text}
+                                </Badge>
+                              </div>
+                            </div>
+                          )}
+                          
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
                               <div>
                                 <CardTitle className="text-lg">Ticket #{ticket.id}</CardTitle>
-                                <CardDescription>{ticket.productCode}</CardDescription>
+                                <CardDescription>Code produit: {ticket.productCode}</CardDescription>
                               </div>
-                              <Badge className={status.color}>
-                                {status.text}
-                              </Badge>
+                              {/* Badge affiché uniquement si pas d'image */}
+                              {(!ticketMetadata[ticket.id] || !ticketMetadata[ticket.id].image) && (
+                                <Badge variant="outline" className={status.color}>
+                                  {status.text}
+                                </Badge>
+                              )}
                             </div>
+                            
+                            {/* Titre et description des métadonnées */}
+                            {ticketMetadata[ticket.id] && ticketMetadata[ticket.id].name && (
+                              <div className="mt-2">
+                                <h3 className="font-medium">{ticketMetadata[ticket.id].name}</h3>
+                                {ticketMetadata[ticket.id].description && (
+                                  <p className="text-xs text-gray-500 line-clamp-2 mt-1">{ticketMetadata[ticket.id].description}</p>
+                                )}
+                              </div>
+                            )}
                           </CardHeader>
-                          <CardContent className="pb-2">
+                          
+                          <CardContent className="pb-2 pt-0 flex-grow">
                             <div className="space-y-2 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-gray-500">Centre:</span>
@@ -431,9 +594,26 @@ export default function TicketAdmin() {
                                     'N/A'}
                                 </span>
                               </div>
+                              
+                              {ticketMetadata[ticket.id] && ticketMetadata[ticket.id].uri && (
+                                <div className="flex justify-end pt-1">
+                                  <a 
+                                    href={ticketMetadata[ticket.id].uri.startsWith('ipfs://') 
+                                      ? `https://ipfs.io/ipfs/${ticketMetadata[ticket.id].uri.substring(7)}`
+                                      : ticketMetadata[ticket.id].uri}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs flex items-center text-blue-600 hover:text-blue-800"
+                                  >
+                                    Voir métadonnées
+                                    <ExternalLinkIcon className="h-3 w-3 ml-1" />
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           </CardContent>
-                          <CardFooter className="flex justify-end gap-1 pt-0">
+                          
+                          <CardFooter className="flex justify-end gap-1 pt-0 mt-auto border-t border-gray-100 bg-gray-50">
                             {Number(ticket.status) === 0 && ( // Available
                               <Button size="icon" variant="ghost" title="Lock" onClick={() => openActionDialog('lock', ticket)}>
                                 <LockClosedIcon className="h-4 w-4" />
@@ -444,7 +624,7 @@ export default function TicketAdmin() {
                                 <Button size="icon" variant="ghost" title="Déverrouiller" onClick={() => openActionDialog('unlock', ticket)}>
                                   <LockOpen2Icon className="h-4 w-4" />
                                 </Button>
-                                <Button size="icon" variant="ghost" title="Utiliser (mode collectionneur)" onClick={() => openActionDialog('use', ticket)}>
+                                <Button size="icon" variant="ghost" title="Utiliser (passage en collector)" onClick={() => openActionDialog('use', ticket)}>
                                   <StarIcon className="h-4 w-4" />
                                 </Button>
                               </>
@@ -558,8 +738,14 @@ export default function TicketAdmin() {
             <Button
               type="button"
               variant="default"
-              onClick={() => handleLockTicket(lockForm.tokenId, lockForm.centerCode)}
-              disabled={isLocking || !lockForm.centerCode}
+              onClick={() => {
+                if ((lockForm.tokenId === '0' || lockForm.tokenId) && lockForm.centerCode) {
+                  handleLockTicket(lockForm.tokenId, lockForm.centerCode);
+                } else {
+                  toast.error('ID du ticket et code du centre sont requis');
+                }
+              }}
+              disabled={isLocking || lockForm.centerCode === undefined || lockForm.centerCode === ''}
             >
               {isLocking ? (
                 <>
@@ -599,7 +785,7 @@ export default function TicketAdmin() {
                 placeholder="000001"
               />
               <p className="text-sm text-gray-500">
-                Confirmez le code du centre pour déverrouiller ce ticket. Le code doit correspondre au centre qui l'a verrouillé.
+                Confirmez le code du centre pour déverrouiller ce ticket. Le code doit correspondre au centre qui l&apos;a verrouillé.
               </p>
             </div>
           </div>
@@ -607,8 +793,14 @@ export default function TicketAdmin() {
             <Button
               type="button"
               variant="default"
-              onClick={() => handleUnlockTicket(unlockForm.tokenId, unlockForm.centerCode)}
-              disabled={isUnlocking || !unlockForm.centerCode}
+              onClick={() => {
+                if ((unlockForm.tokenId === '0' || unlockForm.tokenId) && unlockForm.centerCode) {
+                  handleUnlockTicket(unlockForm.tokenId, unlockForm.centerCode);
+                } else {
+                  toast.error('ID du ticket et code du centre sont requis');
+                }
+              }}
+              disabled={isUnlocking || unlockForm.centerCode === undefined || unlockForm.centerCode === ''}
             >
               {isUnlocking ? (
                 <>
@@ -646,15 +838,21 @@ export default function TicketAdmin() {
               Centre: {selectedTicket?.centerCode}
             </p>
             <p className="text-sm text-gray-500">
-              Produit: {selectedTicket?.productCode}
+              Code produit: {selectedTicket?.productCode}
             </p>
           </div>
           <DialogFooter className="sm:justify-start">
             <Button
               type="button"
               variant="default"
-              onClick={() => handleUseTicket(selectedTicket?.id)}
-              disabled={isCollecting}
+              onClick={() => {
+                if (selectedTicket && (selectedTicket.id === 0 || selectedTicket.id)) {
+                  handleUseTicket(selectedTicket.id);
+                } else {
+                  toast.error('Ticket invalide');
+                }
+              }}
+              disabled={isCollecting || selectedTicket === null || selectedTicket === undefined}
             >
               {isCollecting ? (
                 <>
