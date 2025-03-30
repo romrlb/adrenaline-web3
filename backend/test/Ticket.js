@@ -77,7 +77,7 @@ describe("Ticket Contract", function () {
       
       await expect(
         ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput");
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
     });
 
     it("Should reject creating ticket with empty product code", async function () {
@@ -360,7 +360,7 @@ describe("Ticket Contract", function () {
       
       await expect(
         ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Invalid address");
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
       
       await expect(
         ticket.createTicket(userAccount1.address, "", ethers.parseEther("0.1"))
@@ -597,6 +597,178 @@ describe("Ticket Contract", function () {
     });
   });
 
+  describe("TotalSupply Functionality", function () {
+    it("Should initialize totalSupply to 0", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      
+      // Verify initial total supply is 0
+      expect(await ticket.totalSupply()).to.equal(0);
+    });
+    
+    it("Should increment totalSupply when creating new tokens", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Initial supply should be 0
+      expect(await ticket.totalSupply()).to.equal(0);
+      
+      // Create first ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      expect(await ticket.totalSupply()).to.equal(1);
+      
+      // Create second ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
+      expect(await ticket.totalSupply()).to.equal(2);
+      
+      // Create third ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT3", ethers.parseEther("0.1"));
+      expect(await ticket.totalSupply()).to.equal(3);
+    });
+    
+    it("Should have consistent totalSupply after transfers", async function () {
+      const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
+      
+      // Create a ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      expect(await ticket.totalSupply()).to.equal(1);
+      
+      // Transfer the ticket
+      await ticket.connect(userAccount1).transferFrom(userAccount1.address, userAccount2.address, 0);
+      
+      // Total supply should remain the same after transfer
+      expect(await ticket.totalSupply()).to.equal(1);
+    });
+
+    it("Should update wallet field in ticket data after transfer", async function () {
+      const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
+      
+      // Create a ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Verify initial wallet field
+      let ticketData = await ticket.getTicketInfo(0);
+      expect(ticketData.wallet).to.equal(userAccount1.address);
+      
+      // Transfer the ticket
+      await ticket.connect(userAccount1).transferFrom(userAccount1.address, userAccount2.address, 0);
+      
+      // Verify wallet field is updated after transfer
+      ticketData = await ticket.getTicketInfo(0);
+      expect(ticketData.wallet).to.equal(userAccount2.address);
+    });
+  });
+  
+  describe("Date Handling", function () {
+    it("Should set and retrieve limit date correctly", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Create a ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Get current blockchain timestamp
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+      const currentTimestamp = blockBefore.timestamp;
+      
+      // Set a new limit date 1 week in the future
+      const newLimitDate = currentTimestamp + 7 * 24 * 60 * 60;
+      await ticket.setLimitDate(0, newLimitDate);
+      
+      // Verify limit date was set correctly
+      const ticketData = await ticket.getTicketInfo(0);
+      expect(ticketData.limitDate).to.equal(newLimitDate);
+    });
+    
+    it("Should set and retrieve reservation date correctly", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Create a ticket and lock it
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      await ticket.lockTicket(0, "CENTER1");
+      
+      // Verify initial reservation date (should be set to current timestamp during lock)
+      let ticketData = await ticket.getTicketInfo(0);
+      expect(ticketData.reservationDate).to.be.greaterThan(0);
+      
+      // Get current blockchain timestamp
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+      const currentTimestamp = blockBefore.timestamp;
+      
+      // Set a new reservation date 1 day in the future
+      const newReservationDate = currentTimestamp + 24 * 60 * 60;
+      await ticket.setReservationDate(0, newReservationDate);
+      
+      // Verify reservation date was set correctly
+      ticketData = await ticket.getTicketInfo(0);
+      expect(ticketData.reservationDate).to.equal(newReservationDate);
+    });
+    
+    it("Should handle date validations correctly", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Create a ticket and lock it
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      await ticket.lockTicket(0, "CENTER1");
+      
+      // Get current blockchain timestamp
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+      const currentTimestamp = blockBefore.timestamp;
+      
+      // Set valid dates
+      const validLimitDate = currentTimestamp + 30 * 24 * 60 * 60; // 30 days in future
+      const validReservationDate = currentTimestamp + 7 * 24 * 60 * 60; // 7 days in future
+      
+      await ticket.setLimitDate(0, validLimitDate);
+      await ticket.setReservationDate(0, validReservationDate);
+      
+      // Verify dates were set correctly
+      const ticketData = await ticket.getTicketInfo(0);
+      expect(ticketData.limitDate).to.equal(validLimitDate);
+      expect(ticketData.reservationDate).to.equal(validReservationDate);
+      
+      // Test validation: Limit date in the past
+      const pastDate = currentTimestamp - 24 * 60 * 60; // 1 day in past
+      await expect(
+        ticket.setLimitDate(0, pastDate)
+      ).to.be.revertedWithCustomError(ticket, "DateError")
+        .withArgs(pastDate, "In past");
+        
+      // Test validation: Reservation date after limit date
+      const afterLimitDate = validLimitDate + 1;
+      await expect(
+        ticket.setReservationDate(0, afterLimitDate)
+      ).to.be.revertedWithCustomError(ticket, "DateError")
+        .withArgs(afterLimitDate, "After limit");
+    });
+  });
+  
+  describe("Zero Address Checks", function () {
+    it("Should reject zero address in addAdmin", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      
+      await expect(
+        ticket.addAdmin(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
+    });
+    
+    it("Should reject zero address in removeAdmin", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      
+      await expect(
+        ticket.removeAdmin(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
+    });
+    
+    it("Should reject zero address in createTicket", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      
+      await expect(
+        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
+    });
+  });
+
   describe("Role Management", function () {
     it("Should allow DEFAULT_ADMIN to add new admin", async function () {
       const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
@@ -810,7 +982,7 @@ describe("Ticket Contract", function () {
       
       await expect(
         ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Invalid address");
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
       
       await expect(
         ticket.createTicket(userAccount1.address, "", ethers.parseEther("0.1"))

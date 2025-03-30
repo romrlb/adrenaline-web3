@@ -19,6 +19,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     error InvalidInput(string reason);
     error DateError(uint256 date, string reason);
     error NotAuthorized();
+    error ZeroAddress();
 
     // Role definitions
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -37,8 +38,8 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         string productCode;
         string centerCode;
         uint256 price;
-        uint40 limitDate;
-        uint40 reservationDate; 
+        uint256 limitDate;
+        uint256 reservationDate; 
     }
 
     mapping(uint256 => TicketData) public tickets;
@@ -50,6 +51,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     mapping(uint256 => string) private _tokenURIs;
     
     uint256 private _tokenIdCounter;
+    uint256 private _totalSupply;
     
     string private constant DEFAULT_CENTER_CODE = "000000";
     
@@ -96,11 +98,11 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         string calldata productCode,
         uint256 price
     ) external onlyAdmin nonReentrant returns (uint256) {
-        if (to == address(0)) revert InvalidInput("Invalid address");
+        if (to == address(0)) revert ZeroAddress();
         if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
         
         uint256 tokenId = _tokenIdCounter++;
-        uint40 limitDate = uint40(block.timestamp + 18 * 30 days);
+        uint256 limitDate = block.timestamp + 18 * 30 days;
         
         tickets[tokenId] = TicketData({
             status: NFTStatus.AVAILABLE,
@@ -113,9 +115,18 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         });
         
         _safeMint(to, tokenId);
+        _totalSupply++;
         
         emit TicketCreated(tokenId, to, productCode);
         return tokenId;
+    }
+    
+    /**
+     * @notice Returns the total number of tokens in existence
+     * @return uint256 representing the total supply of tokens
+     */
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
     }
     
     /**
@@ -190,7 +201,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         
         ticket.status = NFTStatus.LOCKED;
         ticket.centerCode = centerCode;
-        ticket.reservationDate = uint40(block.timestamp);
+        ticket.reservationDate = block.timestamp;
         
         emit TicketLocked(tokenId, centerCode);
     }
@@ -260,7 +271,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         if (newReservationDate >= ticket.limitDate) 
             revert DateError(newReservationDate, "After limit");
         
-        ticket.reservationDate = uint40(newReservationDate);
+        ticket.reservationDate = newReservationDate;
     }
     
     /**
@@ -276,7 +287,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         if (ticket.reservationDate > 0 && newLimitDate <= ticket.reservationDate) 
             revert DateError(newLimitDate, "Before reservation");
         
-        ticket.limitDate = uint40(newLimitDate);
+        ticket.limitDate = newLimitDate;
     }
 
     /**
@@ -302,6 +313,8 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         uint256 tokenId,
         address auth
     ) internal virtual override returns (address) {
+        if (to == address(0)) revert ZeroAddress();
+        
         address from = super._update(to, tokenId, auth);
         
         // Skip if it's a mint (from == 0)
@@ -326,6 +339,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      */
     function addAdmin(address account) external {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert NotAuthorized();
+        if (account == address(0)) revert ZeroAddress();
         _grantRole(ADMIN_ROLE, account);
     }
     
@@ -335,6 +349,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      */
     function removeAdmin(address account) external {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert NotAuthorized();
+        if (account == address(0)) revert ZeroAddress();
         _revokeRole(ADMIN_ROLE, account);
     }
 
