@@ -3,7 +3,6 @@ pragma solidity 0.8.29;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 /**
@@ -11,7 +10,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
  * @dev Implementation of the Ticket contract
  * @notice This contract manages the lifecycle of ticket NFTs with different states
  */
-contract Ticket is ERC721, AccessControl, ReentrancyGuard {
+contract Ticket is ERC721, AccessControl {
     using Strings for uint256;
 
     error InvalidId(uint256 tokenId);
@@ -50,6 +49,9 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     // Mapping from tokenId to its specific IPFS URI (for VIP tickets, etc.)
     mapping(uint256 => string) private _tokenURIs;
     
+    // Global metadata URI for the collection
+    string private _globalMetadataURI;
+    
     uint256 private _tokenIdCounter;
     uint256 private _totalSupply;
     
@@ -64,6 +66,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     event TicketExpired(uint256 indexed tokenId);
     event ProductCodeURISet(string productCode, string uri);
     event TokenURISet(uint256 indexed tokenId, string uri);
+    event GlobalMetadataURISet(string uri);
 
     /**
      * @notice Modifier to check if a ticket exists
@@ -97,7 +100,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         address to, 
         string calldata productCode,
         uint256 price
-    ) external onlyAdmin nonReentrant returns (uint256) {
+    ) external onlyAdmin returns (uint256) {
         if (to == address(0)) revert ZeroAddress();
         if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
         
@@ -130,30 +133,6 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     }
     
     /**
-     * @notice Checks if the address is owner or approved for the token
-     * @param spender Address to check
-     * @param tokenId ID of the token
-     * @return bool True if the address is approved or owner
-     */
-    function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
-        address owner = _ownerOf(tokenId);
-        return (spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender);
-    }
-    
-    /**
-     * @notice Public wrapper around _isApprovedOrOwner for testing purposes
-     * @param spender Address to check
-     * @param tokenId ID of the token
-     * @return bool True if the address is approved or owner
-     */
-    function isApprovedOrOwner(address spender, uint256 tokenId) public view ticketExists(tokenId) returns (bool) {
-        // First check for null address to cover all branches
-        if (spender == address(0)) return false;
-        
-        return _isApprovedOrOwner(spender, tokenId);
-    }
-    
-    /**
      * @notice Checks if a ticket is expired based on its limit date
      * @param tokenId ID of the ticket to check
      * @return bool True if the ticket is expired, false otherwise
@@ -165,24 +144,24 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     }
     
     /**
-     * @notice Automatically checks and updates the status of a ticket if it's expired
+     * @notice Checks if a ticket is expired and updates its status if needed
      * @param tokenId ID of the ticket to check
-     * @return bool True if the ticket was updated to expired, false otherwise
+     * @return bool True if the ticket is expired, false otherwise
      */
-    function checkAndUpdateExpiration(uint256 tokenId) public onlyAdmin nonReentrant ticketExists(tokenId) returns (bool) {
+    function checkExpiration(uint256 tokenId) public ticketExists(tokenId) returns (bool) {
         TicketData storage ticket = tickets[tokenId];
-        
         if (NFTStatus.EXPIRED == ticket.status) {
-            return false;
-        }
-        
-        if (ticket.limitDate > 0 && block.timestamp > ticket.limitDate) {
-            ticket.status = NFTStatus.EXPIRED;
-            emit TicketExpired(tokenId);
             return true;
         }
         
-        return false;
+        bool isExpiredByDate = ticket.limitDate > 0 && block.timestamp > ticket.limitDate;
+        
+        if (isExpiredByDate && hasRole(ADMIN_ROLE, msg.sender)) {
+            ticket.status = NFTStatus.EXPIRED;
+            emit TicketExpired(tokenId);
+        }
+        
+        return isExpiredByDate;
     }
 
     /**
@@ -190,8 +169,8 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @param tokenId ID of the ticket to lock
      * @param centerCode Code of the center making the reservation
      */
-    function lockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin nonReentrant ticketExists(tokenId) {
-        if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
+    function lockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin ticketExists(tokenId) {
+        if (checkExpiration(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.AVAILABLE != ticket.status) 
@@ -211,8 +190,8 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @param tokenId ID of the ticket to unlock
      * @param centerCode Code of the center requesting the unlock
      */
-    function unlockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin nonReentrant ticketExists(tokenId) {
-        if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
+    function unlockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin ticketExists(tokenId) {
+        if (checkExpiration(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.LOCKED != ticket.status) 
@@ -233,8 +212,8 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @notice Marks a ticket as used (becomes a collector)
      * @param tokenId ID of the ticket to use
      */
-    function useTicket(uint256 tokenId) external onlyAdmin nonReentrant ticketExists(tokenId) {
-        if (isExpired(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
+    function useTicket(uint256 tokenId) external onlyAdmin ticketExists(tokenId) {
+        if (checkExpiration(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.LOCKED != ticket.status) 
@@ -259,7 +238,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @param tokenId ID of the ticket
      * @param newReservationDate New reservation date (unix timestamp)
      */
-    function setReservationDate(uint256 tokenId, uint256 newReservationDate) external onlyAdmin nonReentrant ticketExists(tokenId) {
+    function setReservationDate(uint256 tokenId, uint256 newReservationDate) external onlyAdmin ticketExists(tokenId) {
         TicketData storage ticket = tickets[tokenId];
         
         if (NFTStatus.LOCKED != ticket.status) 
@@ -279,7 +258,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @param tokenId ID of the ticket
      * @param newLimitDate New limit date (unix timestamp)
      */
-    function setLimitDate(uint256 tokenId, uint256 newLimitDate) external onlyAdmin nonReentrant ticketExists(tokenId) {
+    function setLimitDate(uint256 tokenId, uint256 newLimitDate) external onlyAdmin ticketExists(tokenId) {
         if (newLimitDate <= block.timestamp) 
             revert DateError(newLimitDate, "In past");
         
@@ -294,7 +273,7 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
      * @notice Marks a ticket as expired
      * @param tokenId ID of the ticket to mark as expired
      */
-    function setExpired(uint256 tokenId) external onlyAdmin nonReentrant ticketExists(tokenId) {
+    function setExpired(uint256 tokenId) external onlyAdmin ticketExists(tokenId) {
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.EXPIRED == ticket.status) 
             revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
@@ -354,6 +333,23 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @notice Sets the global metadata URI for the collection
+     * @param uri IPFS URI for the global metadata JSON
+     */
+    function setGlobalMetadataURI(string calldata uri) external onlyAdmin {
+        _globalMetadataURI = uri;
+        emit GlobalMetadataURISet(uri);
+    }
+
+    /**
+     * @notice Gets the global metadata URI for the collection
+     * @return The global metadata URI
+     */
+    function getGlobalMetadataURI() external view returns (string memory) {
+        return _globalMetadataURI;
+    }
+
+    /**
      * @notice Sets the URI for a specific product code
      * @param productCode Product code
      * @param uri IPFS URI for the product image/metadata
@@ -362,6 +358,15 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         if (bytes(productCode).length == 0) revert InvalidInput("Product missing");
         _productCodeURIs[productCode] = uri;
         emit ProductCodeURISet(productCode, uri);
+    }
+
+    /**
+     * @notice Gets the URI associated with a product code
+     * @param productCode Product code
+     * @return The URI associated with the product code
+     */
+    function getProductCodeURI(string calldata productCode) external view returns (string memory) {
+        return _productCodeURIs[productCode];
     }
 
     /**
@@ -404,20 +409,13 @@ contract Ticket is ERC721, AccessControl, ReentrancyGuard {
         // Get the URI associated with the productCode
         string memory uri = _productCodeURIs[productCode];
         
-        // If no URI is defined for this productCode, use the base URI
+        // If no URI is defined for this productCode, use the global metadata URI if available
         if (bytes(uri).length == 0) {
+            if (bytes(_globalMetadataURI).length > 0) {
+                return _globalMetadataURI;
+            }
             return super.tokenURI(tokenId);
         }
-        
         return uri;
-    }
-
-    /**
-     * @notice Gets the URI associated with a product code
-     * @param productCode Product code
-     * @return The URI associated with the product code
-     */
-    function getProductCodeURI(string calldata productCode) external view returns (string memory) {
-        return _productCodeURIs[productCode];
     }
 }
