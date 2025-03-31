@@ -191,7 +191,7 @@ export const ADRENALINE_CONTRACT_ABI = [
   },
   {
     "inputs": [],
-    "name": "ReentrancyGuardReentrantCall",
+    "name": "ZeroAddress",
     "type": "error"
   },
   {
@@ -242,6 +242,19 @@ export const ADRENALINE_CONTRACT_ABI = [
       }
     ],
     "name": "ApprovalForAll",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "uri",
+        "type": "string"
+      }
+    ],
+    "name": "GlobalMetadataURISet",
     "type": "event"
   },
   {
@@ -581,7 +594,7 @@ export const ADRENALINE_CONTRACT_ABI = [
         "type": "uint256"
       }
     ],
-    "name": "checkAndUpdateExpiration",
+    "name": "checkExpiration",
     "outputs": [
       {
         "internalType": "bool",
@@ -635,6 +648,19 @@ export const ADRENALINE_CONTRACT_ABI = [
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getGlobalMetadataURI",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -716,14 +742,14 @@ export const ADRENALINE_CONTRACT_ABI = [
             "type": "uint256"
           },
           {
-            "internalType": "uint40",
+            "internalType": "uint256",
             "name": "limitDate",
-            "type": "uint40"
+            "type": "uint256"
           },
           {
-            "internalType": "uint40",
+            "internalType": "uint256",
             "name": "reservationDate",
-            "type": "uint40"
+            "type": "uint256"
           }
         ],
         "internalType": "struct Ticket.TicketData",
@@ -809,30 +835,6 @@ export const ADRENALINE_CONTRACT_ABI = [
       }
     ],
     "name": "isApprovedForAll",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "spender",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
-      }
-    ],
-    "name": "isApprovedOrOwner",
     "outputs": [
       {
         "internalType": "bool",
@@ -1046,6 +1048,19 @@ export const ADRENALINE_CONTRACT_ABI = [
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "uri",
+        "type": "string"
+      }
+    ],
+    "name": "setGlobalMetadataURI",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "tokenId",
         "type": "uint256"
@@ -1183,14 +1198,14 @@ export const ADRENALINE_CONTRACT_ABI = [
         "type": "uint256"
       },
       {
-        "internalType": "uint40",
+        "internalType": "uint256",
         "name": "limitDate",
-        "type": "uint40"
+        "type": "uint256"
       },
       {
-        "internalType": "uint40",
+        "internalType": "uint256",
         "name": "reservationDate",
-        "type": "uint40"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1210,6 +1225,19 @@ export const ADRENALINE_CONTRACT_ABI = [
         "internalType": "string",
         "name": "",
         "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",

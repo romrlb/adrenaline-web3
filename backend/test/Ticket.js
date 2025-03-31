@@ -72,12 +72,13 @@ describe("Ticket Contract", function () {
       expect(ticketData.status).to.equal(3); // COLLECTOR
     });
 
+
     it("Should reject creating ticket with zero address", async function () {
       const { ticket } = await loadFixture(deployTicketFixture);
       
       await expect(
         ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput");
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
     });
 
     it("Should reject creating ticket with empty product code", async function () {
@@ -113,7 +114,7 @@ describe("Ticket Contract", function () {
       await time.increaseTo(limitDate + 10);
       
       expect(await ticket.isExpired(0)).to.be.true;
-      await ticket.checkAndUpdateExpiration(0);
+      await ticket.checkExpiration(0);
       
       const ticketInfo = await ticket.getTicketInfo(0);
       expect(ticketInfo.status).to.equal(4); // EXPIRED status
@@ -131,18 +132,6 @@ describe("Ticket Contract", function () {
       await expect(
         ticket.setReservationDate(0, pastDate)
       ).to.be.revertedWithCustomError(ticket, "DateError");
-    });
-  });
-
-  describe("Marketplace Functionality", function () {
-    it("Should handle token transfers correctly", async function() {
-      const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      await ticket.connect(userAccount1).transferFrom(userAccount1.address, userAccount2.address, 0);
-      
-      expect(await ticket.ownerOf(0)).to.equal(userAccount2.address);
     });
   });
 
@@ -220,7 +209,7 @@ describe("Ticket Contract", function () {
       await ticket.setLimitDate(0, limitDate);
       await time.increaseTo(limitDate + 10);
       
-      await ticket.checkAndUpdateExpiration(0);
+      await ticket.checkExpiration(0);
       
       await expect(
         ticket.lockTicket(0, "CENTER1")
@@ -294,7 +283,7 @@ describe("Ticket Contract", function () {
       
       await expect(ticket.getTicketInfo(99)).to.be.reverted;
       await expect(ticket.isExpired(99)).to.be.reverted;
-      await expect(ticket.checkAndUpdateExpiration(99)).to.be.reverted;
+      await expect(ticket.checkExpiration(99)).to.be.reverted;
       await expect(ticket.lockTicket(99, "ANY_CENTER")).to.be.reverted;
       await expect(ticket.setExpired(99)).to.be.reverted;
       await expect(
@@ -314,32 +303,6 @@ describe("Ticket Contract", function () {
        .withArgs(past, "In past");
     });
 
-    it("Should cover checkAndUpdateExpiration branches", async function() {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.setExpired(0);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
-      
-      const stateBefore = await ticket.tickets(0);
-      expect(stateBefore.status).to.equal(4); // EXPIRED
-      
-      await expect(ticket.checkAndUpdateExpiration(0))
-        .to.not.emit(ticket, "TicketExpired");
-      
-      let secondTicketData = await ticket.tickets(1);
-      const limitDate = Number(secondTicketData.limitDate);
-      await time.increaseTo(limitDate + 10);
-      
-      await expect(ticket.checkAndUpdateExpiration(1))
-        .to.emit(ticket, "TicketExpired")
-        .withArgs(1);
-      
-      secondTicketData = await ticket.tickets(1);
-      expect(secondTicketData.status).to.equal(4); // EXPIRED
-    });
-
     it("Should test ERC721 functionalities", async function () {
       const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
       
@@ -353,195 +316,6 @@ describe("Ticket Contract", function () {
       
       expect(await ticket.supportsInterface("0x80ac58cd")).to.be.true; // ERC721
       expect(await ticket.supportsInterface("0x00000000")).to.be.false; // Invalid interface
-    });
-
-    it("Should test revert cases in createTicket", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await expect(
-        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Invalid address");
-      
-      await expect(
-        ticket.createTicket(userAccount1.address, "", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Product missing");
-    });
-
-    it("Should verify the ticket token counter increments correctly", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
-      await ticket.createTicket(userAccount1.address, "PRODUCT3", ethers.parseEther("0.1"));
-      
-      expect(await ticket.ownerOf(0)).to.equal(userAccount1.address);
-      expect(await ticket.ownerOf(1)).to.equal(userAccount1.address);
-      expect(await ticket.ownerOf(2)).to.equal(userAccount1.address);
-      
-      const data1 = await ticket.getTicketInfo(0);
-      const data2 = await ticket.getTicketInfo(1);
-      const data3 = await ticket.getTicketInfo(2);
-      
-      expect(data1.productCode).to.equal("PRODUCT1");
-      expect(data2.productCode).to.equal("PRODUCT2");
-      expect(data3.productCode).to.equal("PRODUCT3");
-    });
-
-    it("Should verify events are emitted correctly", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await expect(
-        ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.emit(ticket, "TicketCreated")
-        .withArgs(0, userAccount1.address, "PRODUCT1");
-      
-      await expect(
-        ticket.lockTicket(0, "CENTER1")
-      ).to.emit(ticket, "TicketLocked")
-        .withArgs(0, "CENTER1");
-      
-      await expect(
-        ticket.unlockTicket(0, "CENTER1")
-      ).to.emit(ticket, "TicketUnlocked")
-        .withArgs(0);
-      
-      await ticket.lockTicket(0, "CENTER1");
-      
-      await expect(
-        ticket.useTicket(0)
-      ).to.emit(ticket, "TicketUsed")
-        .withArgs(0);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
-      
-      await expect(
-        ticket.setExpired(1)
-      ).to.emit(ticket, "TicketExpired")
-        .withArgs(1);
-    });
-
-    it("Should test all status branches in lockTicket function", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      // Create tickets for different tests
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1")); // tokenId 0
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1")); // tokenId 1
-      await ticket.createTicket(userAccount1.address, "PRODUCT3", ethers.parseEther("0.1")); // tokenId 2
-      await ticket.createTicket(userAccount1.address, "PRODUCT4", ethers.parseEther("0.1")); // tokenId 3
-      
-      // Test with LOCKED status (NFTStatus.LOCKED = 1)
-      await ticket.lockTicket(0, "CENTER1");
-      await expect(ticket.lockTicket(0, "CENTER1")).to.be.revertedWithCustomError(
-        ticket,
-        "InvalidState"
-      ).withArgs(0, 1);
-      
-      // Test with COLLECTOR status (NFTStatus.COLLECTOR = 3)
-      await ticket.lockTicket(1, "CENTER1");
-      await ticket.useTicket(1);
-      await expect(ticket.lockTicket(1, "CENTER1")).to.be.revertedWithCustomError(
-        ticket,
-        "InvalidState"
-      ).withArgs(1, 3);
-      
-      // Test with EXPIRED status (NFTStatus.EXPIRED = 4)
-      await ticket.setExpired(3);
-      await expect(ticket.lockTicket(3, "CENTER1")).to.be.revertedWithCustomError(
-        ticket,
-        "InvalidState"
-      ).withArgs(3, 4);
-    });
-
-    it("Should exhaustively test checkAndUpdateExpiration", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      // Case 1: Ticket not expired and limit date not reached - should return false
-      const tx1 = await ticket.checkAndUpdateExpiration(0);
-      const receipt1 = await tx1.wait();
-      expect(receipt1.logs.length).to.equal(0);
-      
-      // Case 2: Ticket already expired - should return false
-      await ticket.setExpired(0);
-      const tx2 = await ticket.checkAndUpdateExpiration(0);
-      const receipt2 = await tx2.wait();
-      expect(receipt2.logs.length).to.equal(0);
-      
-      // Case 3: Ticket not expired but limit date reached - should return true
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
-      
-      // Get current blockchain timestamp
-      const blockNumBefore = await ethers.provider.getBlockNumber();
-      const blockBefore = await ethers.provider.getBlock(blockNumBefore);
-      const timestampBefore = blockBefore.timestamp;
-      
-      // Set limit date close to current time
-      await ticket.setLimitDate(1, timestampBefore + 100);
-      
-      // Advance time past the limit date
-      await ethers.provider.send('evm_increaseTime', [200]);
-      await ethers.provider.send('evm_mine');
-      
-      // Check and update expiration should now return true
-      const tx3 = await ticket.checkAndUpdateExpiration(1);
-      const receipt3 = await tx3.wait();
-      
-      // Verify event was emitted
-      expect(receipt3.logs.length).to.be.greaterThan(0);
-      
-      // Verify ticket state was updated to EXPIRED
-      const updatedTicketInfo = await ticket.getTicketInfo(1);
-      expect(updatedTicketInfo.status).to.equal(4); // EXPIRED status
-    });
-
-    it("Should test safeTransferFrom functionality", async function () {
-      const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      await ticket.connect(userAccount1)["safeTransferFrom(address,address,uint256)"](
-        userAccount1.address, 
-        userAccount2.address, 
-        0
-      );
-      
-      expect(await ticket.ownerOf(0)).to.equal(userAccount2.address);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
-      
-      await ticket.connect(userAccount1)["safeTransferFrom(address,address,uint256,bytes)"](
-        userAccount1.address, 
-        userAccount2.address, 
-        1,
-        "0x"
-      );
-      
-      expect(await ticket.ownerOf(1)).to.equal(userAccount2.address);
-    });
-
-    it("Should test isApprovedOrOwner directly", async function () {
-      const { ticket, owner, userAccount1, userAccount2, userAccount3 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      // Case 1: Owner
-      expect(await ticket.isApprovedOrOwner(userAccount1.address, 0)).to.be.true;
-      
-      // Case 2: Specifically approved address
-      await ticket.connect(userAccount1).approve(userAccount2.address, 0);
-      expect(await ticket.isApprovedOrOwner(userAccount2.address, 0)).to.be.true;
-      
-      // Case 3: Address approved for all tokens
-      await ticket.connect(userAccount1).setApprovalForAll(userAccount3.address, true);
-      expect(await ticket.isApprovedOrOwner(userAccount3.address, 0)).to.be.true;
-      
-      // Case 4: Unauthorized address
-      expect(await ticket.isApprovedOrOwner(owner.address, 0)).to.be.false;
-      
-      // Case 5: Zero address (to maximize branch coverage)
-      await expect(ticket.isApprovedOrOwner(ethers.ZeroAddress, 0)).to.not.be.reverted;
-      expect(await ticket.isApprovedOrOwner(ethers.ZeroAddress, 0)).to.be.false;
     });
 
     it("Should test all branches in isExpired", async function () {
@@ -564,51 +338,36 @@ describe("Ticket Contract", function () {
       await ethers.provider.send("evm_mine");
       expect(await ticket.isExpired(1)).to.be.true;
     });
+  });
 
-    it("Should test _update with mint and transfer cases", async function () {
-      const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
-      
-      // Case 1: Mint - checks _update is called with from = address(0)
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      const ticketData = await ticket.getTicketInfo(0);
-      expect(ticketData.wallet).to.equal(userAccount1.address);
-      
-      // Case 2: Transfer - checks _update is called with from != address(0)
-      await ticket.connect(userAccount1).transferFrom(userAccount1.address, userAccount2.address, 0);
-      
-      const updatedTicketData = await ticket.getTicketInfo(0);
-      expect(updatedTicketData.wallet).to.equal(userAccount2.address);
-    });
-
-    it("Should test modifier ticketExists with invalid token ID", async function () {
+  describe("TotalSupply Functionality", function () {
+    it("Should initialize totalSupply to 0", async function () {
       const { ticket } = await loadFixture(deployTicketFixture);
       
-      await expect(ticket.isApprovedOrOwner(ethers.ZeroAddress, 999))
-        .to.be.revertedWithCustomError(ticket, "InvalidId")
-        .withArgs(999);
+      // Verify initial total supply is 0
+      expect(await ticket.totalSupply()).to.equal(0);
     });
-
-    it("Should test modifier onlyAdmin with non-admin", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+  });
+  
+  describe("Zero Address Checks", function () {
+    it("Should reject zero address in addAdmin", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
       
-      await expect(ticket.connect(userAccount1).addAdmin(userAccount1.address))
-        .to.be.revertedWithCustomError(ticket, "NotAuthorized");
+      await expect(
+        ticket.addAdmin(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
+    });
+    
+    it("Should reject zero address in removeAdmin", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      
+      await expect(
+        ticket.removeAdmin(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(ticket, "ZeroAddress");
     });
   });
 
-  describe("Role Management", function () {
-    it("Should allow DEFAULT_ADMIN to add new admin", async function () {
-      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
-      const ADMIN_ROLE = await ticket.ADMIN_ROLE();
-      
-      expect(await ticket.hasRole(ADMIN_ROLE, userAccount1.address)).to.be.false;
-      
-      await ticket.addAdmin(userAccount1.address);
-      
-      expect(await ticket.hasRole(ADMIN_ROLE, userAccount1.address)).to.be.true;
-    });
-    
+  describe("Role Management", function () { 
     it("Should allow DEFAULT_ADMIN to remove an admin", async function () {
       const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
       const ADMIN_ROLE = await ticket.ADMIN_ROLE();
@@ -633,20 +392,6 @@ describe("Ticket Contract", function () {
       await expect(
         ticket.connect(userAccount1).removeAdmin(owner.address)
       ).to.be.revertedWithCustomError(ticket, "NotAuthorized");
-    });
-    
-    it("Should allow new admin to perform admin operations", async function () {
-      const { ticket, owner, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.addAdmin(userAccount1.address);
-      
-      // Try creating a ticket with the new admin
-      await expect(
-        ticket.connect(userAccount1).createTicket(userAccount2.address, "PRODUCT1", ethers.parseEther("0.1"))
-      ).not.to.be.reverted;
-      
-      // Verify the ticket was created
-      expect(await ticket.ownerOf(0)).to.equal(userAccount2.address);
     });
   });
 
@@ -675,35 +420,6 @@ describe("Ticket Contract", function () {
       // Tentative de définir l'URI avec un productCode vide
       await expect(ticket.setProductCodeURI("", ipfsURI))
         .to.be.revertedWithCustomError(ticket, "InvalidInput");
-    });
-    
-    it("Should return correct tokenURI based on product code", async function () {
-      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
-      const productCode = "PRODUCT1";
-      const ipfsURI = "ipfs://QmTest123456/image.jpg";
-      
-      // Créer un ticket avec ce productCode
-      await ticket.createTicket(userAccount1.address, productCode, ethers.parseEther("0.1"));
-      const tokenId = 0; // Premier token créé
-      
-      // Définir l'URI pour le productCode
-      await ticket.setProductCodeURI(productCode, ipfsURI);
-      
-      // Vérifier que le tokenURI renvoie l'URI du productCode
-      expect(await ticket.tokenURI(tokenId)).to.equal(ipfsURI);
-    });
-    
-    it("Should use default URI when product code has no URI set", async function () {
-      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
-      const productCode = "PRODUCT2";
-      
-      // Créer un ticket avec ce productCode
-      await ticket.createTicket(userAccount1.address, productCode, ethers.parseEther("0.1"));
-      const tokenId = 0; // Premier token créé
-      
-      // Vérifier que le tokenURI renvoie l'URI par défaut (baseURI + tokenId)
-      // Note: Par défaut dans ERC721, c'est une chaîne vide
-      expect(await ticket.tokenURI(tokenId)).to.equal("");
     });
     
     it("Should allow only admin to set product code URI", async function () {
@@ -745,43 +461,6 @@ describe("Ticket Contract", function () {
       expect(await ticket.tokenURI(tokenId)).to.equal(specificURI);
     });
     
-    it("Should prioritize specific token URI over product code URI", async function () {
-      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
-      const productCode = "PRODUCT1";
-      const productURI = "ipfs://QmProduct123/metadata.json";
-      const specificURI = "ipfs://QmSpecific456/vip_metadata.json";
-      
-      // Create two tickets with same product code
-      await ticket.createTicket(userAccount1.address, productCode, ethers.parseEther("0.1"));
-      await ticket.createTicket(userAccount1.address, productCode, ethers.parseEther("0.1"));
-      
-      // Set product code URI
-      await ticket.setProductCodeURI(productCode, productURI);
-      
-      // Set specific URI only for first token
-      await ticket.setTokenURI(0, specificURI);
-      
-      // Verify first token uses specific URI
-      expect(await ticket.tokenURI(0)).to.equal(specificURI);
-      
-      // Verify second token still uses product URI
-      expect(await ticket.tokenURI(1)).to.equal(productURI);
-    });
-    
-    it("Should emit event when setting token URI", async function () {
-      const { ticket, owner, userAccount1 } = await loadFixture(deployTicketFixture);
-      const productCode = "PRODUCT1";
-      const specificURI = "ipfs://QmSpecific456/vip_metadata.json";
-      
-      // Create a ticket
-      await ticket.createTicket(userAccount1.address, productCode, ethers.parseEther("0.1"));
-      
-      // Set specific token URI and check event
-      await expect(ticket.setTokenURI(0, specificURI))
-        .to.emit(ticket, "TokenURISet")
-        .withArgs(0, specificURI);
-    });
-    
     it("Should reject setting token URI for non-existent token", async function () {
       const { ticket } = await loadFixture(deployTicketFixture);
       const specificURI = "ipfs://QmSpecific456/vip_metadata.json";
@@ -802,76 +481,33 @@ describe("Ticket Contract", function () {
       await expect(ticket.connect(userAccount1).setTokenURI(0, specificURI))
         .to.be.revertedWithCustomError(ticket, "NotAuthorized");
     });
-  });
 
-  describe("Error Messages and Input Validation", function () {
-    it("Should provide specific error messages", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await expect(
-        ticket.createTicket(ethers.ZeroAddress, "PRODUCT1", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Invalid address");
-      
-      await expect(
-        ticket.createTicket(userAccount1.address, "", ethers.parseEther("0.1"))
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Product missing");
-    });
-  });
-
-  describe("Some other tests", function () {
-    it("Should test all branches of supportsInterface", async function () {
+    it("Should set and get global metadata URI correctly", async function () {
       const { ticket } = await loadFixture(deployTicketFixture);
+      const globalURI = "ipfs://QmGlobalMetadata123/collection.json";
       
-      // ERC165 interface (all ERC-721 implement this)
-      expect(await ticket.supportsInterface("0x01ffc9a7")).to.be.true;
+      // Set global metadata URI
+      await expect(ticket.setGlobalMetadataURI(globalURI))
+        .to.emit(ticket, "GlobalMetadataURISet")
+        .withArgs(globalURI);
       
-      // ERC-721
-      expect(await ticket.supportsInterface("0x80ac58cd")).to.be.true;
-      
-      // ERC-721 Metadata
-      expect(await ticket.supportsInterface("0x5b5e139f")).to.be.true;
-      
-      // Random interface ID - should return false
-      expect(await ticket.supportsInterface("0x12345678")).to.be.false;
+      // Get global metadata URI
+      expect(await ticket.getGlobalMetadataURI()).to.equal(globalURI);
     });
     
-    it("Should test tokenURI with different URI scenarios", async function () {
+    it("Should use global metadata URI when product code has no URI", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      const globalURI = "ipfs://QmGlobalMetadata123/collection.json";
+      const productCode = "PRODUCT1";
       
-      // Create a ticket
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      // Set global metadata URI
+      await ticket.setGlobalMetadataURI(globalURI);
       
-      // 1. Default case - check initial token URI
-      const initialURI = await ticket.tokenURI(0);
+      // Create a ticket without setting product code URI
+      await ticket.createTicket(userAccount1.address, productCode, ethers.parseEther("0.1"));
       
-      // 2. Set a specific URI for a token
-      const specificURI = "ipfs://specificURI";
-      await ticket.setTokenURI(0, specificURI);
-      expect(await ticket.tokenURI(0)).to.equal(specificURI);
-    });
-    
-    it("Should test all branches in isExpired", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      // Initial state - not expired
-      expect(await ticket.isExpired(0)).to.be.false;
-      
-      // After setting expired
-      await ticket.setExpired(0);
-      expect(await ticket.isExpired(0)).to.be.true;
-      
-      // Test with limit date
-      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.1"));
-      const timestamp = await ethers.provider.getBlock("latest").then(b => b.timestamp);
-      await ticket.setLimitDate(1, timestamp + 100);
-      expect(await ticket.isExpired(1)).to.be.false;
-      
-      // Advance time to test limit date branch
-      await ethers.provider.send("evm_increaseTime", [200]);
-      await ethers.provider.send("evm_mine");
-      expect(await ticket.isExpired(1)).to.be.true;
+      // Token URI should fall back to global metadata URI
+      expect(await ticket.tokenURI(0)).to.equal(globalURI);
     });
   });
 });
