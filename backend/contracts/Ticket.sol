@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
@@ -10,7 +11,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
  * @dev Implementation of the Ticket contract
  * @notice This contract manages the lifecycle of ticket NFTs with different states
  */
-contract Ticket is ERC721, AccessControl {
+contract Ticket is ERC721, ERC721URIStorage, AccessControl {
     using Strings for uint256;
 
     error InvalidId(uint256 tokenId);
@@ -45,9 +46,6 @@ contract Ticket is ERC721, AccessControl {
     
     // Mapping from productCode to its IPFS URI
     mapping(string => string) private _productCodeURIs;
-    
-    // Mapping from tokenId to its specific IPFS URI (for VIP tickets, etc.)
-    mapping(uint256 => string) private _tokenURIs;
     
     // Global metadata URI for the collection
     string private _globalMetadataURI;
@@ -306,9 +304,9 @@ contract Ticket is ERC721, AccessControl {
     }
     
     /**
-     * @dev Override the supportsInterface function to include the ERC165 interface for AccessControl
+     * @dev Override the supportsInterface function to include the ERC165 interface for AccessControl and ERC721URIStorage
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, ERC721URIStorage, AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -375,7 +373,7 @@ contract Ticket is ERC721, AccessControl {
      * @param uri New URI for the token
      */
     function setTokenURI(uint256 tokenId, string calldata uri) external onlyAdmin ticketExists(tokenId) {
-        _tokenURIs[tokenId] = uri;
+        _setTokenURI(tokenId, uri);
         emit TokenURISet(tokenId, uri);
     }
 
@@ -385,7 +383,7 @@ contract Ticket is ERC721, AccessControl {
      * @return The specific URI for the token, or empty string if not set
      */
     function getTokenURI(uint256 tokenId) external view ticketExists(tokenId) returns (string memory) {
-        return _tokenURIs[tokenId];
+        return super.tokenURI(tokenId);
     }
 
     /**
@@ -393,11 +391,11 @@ contract Ticket is ERC721, AccessControl {
      * @param tokenId Token ID
      * @return The metadata URI
      */
-    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+    function tokenURI(uint256 tokenId) public view virtual override(ERC721, ERC721URIStorage) returns (string memory) {
         _requireOwned(tokenId);
         
         // Check if there's a specific URI for this token
-        string memory specificUri = _tokenURIs[tokenId];
+        string memory specificUri = super.tokenURI(tokenId);
         if (bytes(specificUri).length > 0) {
             return specificUri;
         }
@@ -410,11 +408,8 @@ contract Ticket is ERC721, AccessControl {
         string memory uri = _productCodeURIs[productCode];
         
         // If no URI is defined for this productCode, use the global metadata URI if available
-        if (bytes(uri).length == 0) {
-            if (bytes(_globalMetadataURI).length > 0) {
-                return _globalMetadataURI;
-            }
-            return super.tokenURI(tokenId);
+        if (bytes(uri).length == 0 && bytes(_globalMetadataURI).length > 0) {
+            return _globalMetadataURI;
         }
         return uri;
     }
