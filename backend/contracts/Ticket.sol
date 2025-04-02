@@ -166,19 +166,27 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
      * @notice Locks a ticket (reservation by a center)
      * @param tokenId ID of the ticket to lock
      * @param centerCode Code of the center making the reservation
+     * @param reservationDate Unix timestamp for the reservation date (0 to use current timestamp)
      */
-    function lockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin ticketExists(tokenId) {
+    function lockTicket(uint256 tokenId, string calldata centerCode, uint256 reservationDate) external onlyAdmin ticketExists(tokenId) {
         if (checkExpiration(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
-        
+        if (keccak256(bytes(centerCode)) == keccak256(bytes(DEFAULT_CENTER_CODE))) revert InvalidInput("Center should not be default");
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.AVAILABLE != ticket.status) 
             revert InvalidState(tokenId, uint8(ticket.status));
             
         if (bytes(centerCode).length == 0) revert InvalidInput("Center missing");
         
+        // Use current timestamp if reservationDate is 0
+        uint256 actualReservationDate = reservationDate > 0 ? reservationDate : block.timestamp;
+        
+        // Check if reservation date is after limit date + 1 day
+        if (ticket.limitDate > 0 && actualReservationDate >= (ticket.limitDate + 1 days)) 
+            revert DateError(actualReservationDate, "After limit+1day");
+        
         ticket.status = NFTStatus.LOCKED;
         ticket.centerCode = centerCode;
-        ticket.reservationDate = block.timestamp;
+        ticket.reservationDate = actualReservationDate;
         
         emit TicketLocked(tokenId, centerCode);
     }
@@ -186,22 +194,17 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
     /**
      * @notice Unlocks a ticket (reservation cancellation)
      * @param tokenId ID of the ticket to unlock
-     * @param centerCode Code of the center requesting the unlock
      */
-    function unlockTicket(uint256 tokenId, string calldata centerCode) external onlyAdmin ticketExists(tokenId) {
+    function unlockTicket(uint256 tokenId) external onlyAdmin ticketExists(tokenId) {
         if (checkExpiration(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         
         TicketData storage ticket = tickets[tokenId];
         if (NFTStatus.LOCKED != ticket.status) 
             revert InvalidState(tokenId, uint8(ticket.status));
-            
-        if (bytes(centerCode).length == 0) revert InvalidInput("Center missing");
-        
-        if (keccak256(bytes(ticket.centerCode)) != keccak256(bytes(centerCode)))
-            revert InvalidInput("Center not matching");
         
         ticket.status = NFTStatus.AVAILABLE;
         ticket.centerCode = DEFAULT_CENTER_CODE;
+        ticket.reservationDate = 0;
         
         emit TicketUnlocked(tokenId);
     }
@@ -242,11 +245,8 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
         if (NFTStatus.LOCKED != ticket.status) 
             revert InvalidState(tokenId, uint8(ticket.status));
             
-        if (newReservationDate <= block.timestamp) 
-            revert DateError(newReservationDate, "In past");
-            
-        if (newReservationDate >= ticket.limitDate) 
-            revert DateError(newReservationDate, "After limit");
+        if (newReservationDate >= ticket.limitDate + 1 days) 
+            revert DateError(newReservationDate, "After limit+1day");
         
         ticket.reservationDate = newReservationDate;
     }

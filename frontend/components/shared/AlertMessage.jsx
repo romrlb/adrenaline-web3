@@ -7,14 +7,14 @@ import {
 } from "@/components/ui/alert";
 
 /**
- * Composant d'alerte réutilisable
- * @param {string} type - Type d'alerte: 'success', 'info', 'warning', 'error'
- * @param {string} title - Titre de l'alerte
- * @param {string|React.ReactNode} message - Message de l'alerte
- * @param {boolean} breakAll - Si true, permet aux longs textes de se casser (pour les hash)
+ * Reusable alert component
+ * @param {string} type - Alert type: 'success', 'info', 'warning', 'error'
+ * @param {string} title - Alert title
+ * @param {string|React.ReactNode} message - Alert message
+ * @param {boolean} breakAll - If true, allows long texts to break (for hashes)
  */
 const AlertMessage = ({ type = 'info', title = 'Information', message, breakAll = false }) => {
-  // Définir les couleurs de fond en fonction du type
+  // Define background colors based on type
   const bgColors = {
     success: 'bg-lime-200',
     info: 'bg-blue-100',
