@@ -2,17 +2,8 @@
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
+import NotConnected from '@/components/shared/NotConnected';
 import { Button } from '@/components/ui/button';
-
-const NotConnected = () => {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh]">
-      <h1 className="text-3xl font-bold mb-6">Plateforme de saut en parachute</h1>
-      <p className="text-xl mb-8">Connectez votre portefeuille pour accéder à l&apos;application</p>
-      <ConnectButton />
-    </div>
-  );
-};
 
 export default function Home() {
   const { isConnected } = useAccount();
