@@ -7,7 +7,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ReloadIcon, PlusIcon } from '@radix-ui/react-icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { parseEther } from 'viem';
+
+// Options temporaires en attendant l'implémentation de Supabase
+const CENTERS = [
+  { code: '000001', name: 'Centre Parachutisme Paris-Nevers' },
+  { code: '000002', name: 'Ciel d\'Aventures' }
+];
+
+// Products with their corresponding prices
+const PRODUCTS = [
+  { code: 'P01T01', name: 'Saut en parachute tandem', price: '279' },
+  { code: 'P01T02', name: 'Saut en parachute tandem+vidéo', price: '359' },
+  { code: 'P01T03', name: 'Saut en parachute tandem VIP', price: '429' }
+];
 
 /**
  * Form component for creating a new ticket
@@ -28,6 +42,24 @@ export default function CreateTicketForm({ onSubmit, isLoading, isConnected }) {
   const handleChange = (e) => {
     const { id, value } = e.target;
     setFormData((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleSelectChange = (id, value) => {
+    if (id === 'productCode') {
+      // Automatically set the price based on the selected product
+      const selectedProduct = PRODUCTS.find(product => product.code === value);
+      if (selectedProduct) {
+        setFormData((prev) => ({ 
+          ...prev, 
+          [id]: value,
+          price: selectedProduct.price 
+        }));
+      } else {
+        setFormData((prev) => ({ ...prev, [id]: value }));
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, [id]: value }));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -79,12 +111,21 @@ export default function CreateTicketForm({ onSubmit, isLoading, isConnected }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="productCode">Code produit</Label>
-              <Input
-                id="productCode"
+              <Select
                 value={formData.productCode}
-                onChange={handleChange}
-                placeholder="P01T01"
-              />
+                onValueChange={(value) => handleSelectChange('productCode', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez un produit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRODUCTS.map((product) => (
+                    <SelectItem key={product.code} value={product.code}>
+                      {product.code} - {product.name} - {product.price} EUR
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="price">Prix (EUR)</Label>
@@ -94,7 +135,8 @@ export default function CreateTicketForm({ onSubmit, isLoading, isConnected }) {
                 step="10"
                 value={formData.price}
                 onChange={handleChange}
-                placeholder="ex: 289"
+                placeholder=""
+                readOnly
               />
             </div>
             <div className="space-y-2">

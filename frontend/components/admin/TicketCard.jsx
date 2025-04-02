@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LockClosedIcon, LockOpen2Icon, StarIcon, ReloadIcon, ExternalLinkIcon } from '@radix-ui/react-icons';
 import Image from 'next/image';
+import { formatEther } from 'viem';
 
 // Utility function to get status information
 const getStatusInfo = (status) => {
@@ -18,6 +19,32 @@ const getStatusInfo = (status) => {
     4: { text: 'Expiré', color: 'bg-red-100 text-red-800 border-red-200' }
   };
   return statusMap[status] || { text: 'Unknown', color: 'bg-gray-100 text-gray-800 border-gray-200' };
+};
+
+// Utility function to format date and time
+const formatDateTime = (timestamp) => {
+  if (!timestamp) return '-';
+  const date = new Date(Number(timestamp) * 1000);
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+};
+
+// Check if timestamp is expired (past date)
+const isExpired = (timestamp) => {
+  if (!timestamp) return false;
+  return Number(timestamp) * 1000 < Date.now();
+};
+
+// Check if reservation date is soon (within next 48 hours)
+const isReservationSoon = (timestamp) => {
+  if (!timestamp) return false;
+  const reservationTime = Number(timestamp) * 1000;
+  const now = Date.now();
+  const hoursRemaining = (reservationTime - now) / (1000 * 60 * 60);
+  return reservationTime > now && hoursRemaining <= 48;
 };
 
 /**
@@ -44,6 +71,12 @@ export default function TicketCard({ ticket, onAction }) {
   const handleImageError = () => {
     console.warn(`Failed to load image for ticket #${ticket.id}`);
     setImageError(true);
+  };
+  
+  const formatPrice = (priceInWei) => {
+    if (!priceInWei) return '0 EUR';
+    const priceInEth = formatEther(priceInWei);
+    return `${parseFloat(priceInEth).toFixed(0)} EUR`;
   };
   
   return (
@@ -104,8 +137,24 @@ export default function TicketCard({ ticket, onAction }) {
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Prix:</span>
-            <span className="font-medium">{ticket.priceFormatted} EUR</span>
+            <span className="font-medium">{formatPrice(ticket.price)}</span>
           </div>
+          {ticket.limitDate && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Date limite:</span>
+              <span className={`font-medium ${isExpired(ticket.limitDate) ? 'text-red-600' : ''}`}>
+                {formatDateTime(ticket.limitDate)}
+              </span>
+            </div>
+          )}
+          {ticket.reservationDate && Number(ticket.reservationDate) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Réservation:</span>
+              <span className={`font-medium ${isReservationSoon(ticket.reservationDate) ? 'text-orange-600' : ''}`}>
+                {formatDateTime(ticket.reservationDate)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-gray-500">Propriétaire:</span>
             <span className="font-mono text-xs truncate max-w-[140px]">
