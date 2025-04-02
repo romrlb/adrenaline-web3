@@ -907,6 +907,11 @@ export const ADRENALINE_CONTRACT_ABI = [
         "internalType": "string",
         "name": "centerCode",
         "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reservationDate",
+        "type": "uint256"
       }
     ],
     "name": "lockTicket",
@@ -1304,11 +1309,6 @@ export const ADRENALINE_CONTRACT_ABI = [
         "internalType": "uint256",
         "name": "tokenId",
         "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "centerCode",
-        "type": "string"
       }
     ],
     "name": "unlockTicket",
