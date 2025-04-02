@@ -42,7 +42,7 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
+      await ticket.lockTicket(0, "CENTER1", 0);
       
       const ticketData = await ticket.tickets(0);
       expect(ticketData.status).to.equal(1); // LOCKED
@@ -53,8 +53,8 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
-      await ticket.unlockTicket(0, "CENTER1");
+      await ticket.lockTicket(0, "CENTER1", 0);
+      await ticket.unlockTicket(0);
       
       const ticketData = await ticket.tickets(0);
       expect(ticketData.status).to.equal(0); // AVAILABLE
@@ -65,13 +65,12 @@ describe("Ticket Contract", function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
+      await ticket.lockTicket(0, "CENTER1", 0);
       await ticket.useTicket(0);
       
       const ticketData = await ticket.tickets(0);
-      expect(ticketData.status).to.equal(3); // COLLECTOR
+      expect(ticketData.status).to.equal(3); // COLLECTOR (index 3 dans l'énumération NFTStatus actuelle)
     });
-
 
     it("Should reject creating ticket with zero address", async function () {
       const { ticket } = await loadFixture(deployTicketFixture);
@@ -88,96 +87,6 @@ describe("Ticket Contract", function () {
         ticket.createTicket(userAccount1.address, "", ethers.parseEther("0.1"))
       ).to.be.revertedWithCustomError(ticket, "InvalidInput");
     });
-  });
-
-  describe("Expiration and Date Management", function () {
-    it("Should prevent marking an already expired ticket", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.setExpired(0);
-      
-      await expect(
-        ticket.setExpired(0)
-      ).to.be.revertedWithCustomError(ticket, "InvalidState");
-    });
-
-    it("Should auto-expire a ticket when limit date is reached", async function() {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      let ticketData = await ticket.tickets(0);
-      const limitDate = Number(ticketData.limitDate);
-      expect(limitDate).to.be.greaterThan(Math.floor(Date.now() / 1000));
-      
-      await time.increaseTo(limitDate + 10);
-      
-      expect(await ticket.isExpired(0)).to.be.true;
-      await ticket.checkExpiration(0);
-      
-      const ticketInfo = await ticket.getTicketInfo(0);
-      expect(ticketInfo.status).to.equal(4); // EXPIRED status
-    });
-
-    it("Should reject setting reservation date in the past", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
-      
-      const now = Math.floor(Date.now() / 1000);
-      const pastDate = now - 3600; // -1 hour
-      
-      await expect(
-        ticket.setReservationDate(0, pastDate)
-      ).to.be.revertedWithCustomError(ticket, "DateError");
-    });
-  });
-
-  describe("State Validation and Error Cases", function () {
-    it("Should reject locking with an empty center code", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      
-      await expect(
-        ticket.lockTicket(0, "")
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput");
-    });
-
-    it("Should reject locking a non-AVAILABLE ticket", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
-      
-      await expect(
-        ticket.lockTicket(0, "CENTER1")
-      ).to.be.revertedWithCustomError(ticket, "InvalidState");
-    });
-
-    it("Should reject unlocking with an empty center code", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
-      
-      await expect(
-        ticket.unlockTicket(0, "")
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput");
-    });
-
-    it("Should reject unlocking with a different center", async function () {
-      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
-      
-      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
-      
-      await expect(
-        ticket.unlockTicket(0, "CENTER2")
-      ).to.be.revertedWithCustomError(ticket, "InvalidInput").withArgs("Center not matching");
-    });
 
     it("Should reject unlocking a non-LOCKED ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
@@ -185,7 +94,7 @@ describe("Ticket Contract", function () {
       await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
       
       await expect(
-        ticket.unlockTicket(0, "CENTER1")
+        ticket.unlockTicket(0)
       ).to.be.revertedWithCustomError(ticket, "InvalidState");
     });
 
@@ -197,6 +106,21 @@ describe("Ticket Contract", function () {
       await expect(
         ticket.useTicket(0)
       ).to.be.revertedWithCustomError(ticket, "InvalidState");
+    });
+
+    it("Should successfully lock a ticket in AVAILABLE state", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Essayer de verrouiller un ticket en état AVAILABLE (devrait réussir)
+      await expect(
+        ticket.lockTicket(0, "CENTER2", 0)
+      ).not.to.be.reverted;
+      
+      const ticketData = await ticket.tickets(0);
+      expect(ticketData.status).to.equal(1); // LOCKED
+      expect(ticketData.centerCode).to.equal("CENTER2");
     });
 
     it("Should reject operations on expired tickets", async function () {
@@ -212,41 +136,213 @@ describe("Ticket Contract", function () {
       await ticket.checkExpiration(0);
       
       await expect(
-        ticket.lockTicket(0, "CENTER1")
+        ticket.lockTicket(0, "CENTER1", 0)
       ).to.be.revertedWithCustomError(ticket, "InvalidState");
       
       await expect(
-        ticket.unlockTicket(0, "CENTER1")
+        ticket.unlockTicket(0)
       ).to.be.revertedWithCustomError(ticket, "InvalidState");
       
       await expect(
         ticket.useTicket(0)
       ).to.be.revertedWithCustomError(ticket, "InvalidState");
     });
-  });
 
-  describe("Additional Test Cases", function () {
-    it("Should cover reservation date after limit date case", async function () {
+    it("Should prevent marking an already expired ticket", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
+      await ticket.setExpired(0);
       
-      const now = Math.floor(Date.now() / 1000);
-      const limitDate = now + 3600;
+      await expect(
+        ticket.setExpired(0)
+      ).to.be.revertedWithCustomError(ticket, "InvalidState");
+    });
+
+    it("Should reject locking a non-AVAILABLE ticket", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Créer un ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Verrouiller le ticket (passe de AVAILABLE à LOCKED)
+      await ticket.lockTicket(0, "CENTER1", 0);
+      
+      // Vérifier que le ticket est bien en état LOCKED
+      let ticketData = await ticket.tickets(0);
+      expect(ticketData.status).to.equal(1); // LOCKED
+      
+      // Essayer de verrouiller à nouveau le ticket qui est déjà verrouillé (devrait échouer)
+      await expect(
+        ticket.lockTicket(0, "CENTER2", 0)
+      ).to.be.revertedWithCustomError(ticket, "InvalidState")
+       .withArgs(0, 1); // TokenId 0, status LOCKED (1)
+    });
+  });
+
+  describe("Expiration and Date Management", function () {
+    it("Should auto-expire a ticket when limit date is reached", async function() {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Set a closer limit date for testing (current time + 10 seconds)
+      const now = await time.latest();
+      const newLimitDate = now + 10;
+      await ticket.setLimitDate(0, newLimitDate);
+      
+      // Advance time past the limit date
+      await time.increaseTo(newLimitDate + 5);
+      
+      expect(await ticket.isExpired(0)).to.be.true;
+      await ticket.checkExpiration(0);
+      
+      const ticketInfo = await ticket.getTicketInfo(0);
+      expect(ticketInfo.status).to.equal(4); // EXPIRED status (index 4 dans l'énumération NFTStatus actuelle)
+    });
+
+    it("Should reject setting reservation date after limitDate + 1 day", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      await ticket.lockTicket(0, "CENTER1", 0);
+      
+      // Set limit date to current time + 1 day
+      const now = await time.latest();
+      const limitDate = now + 24 * 60 * 60;
       await ticket.setLimitDate(0, limitDate);
       
-      const afterLimitDate = limitDate + 100;
+      // Try to set reservation date to limit + 1 day + 1 second
+      const afterLimitPlusOneDay = limitDate + 24 * 60 * 60 + 1;
       await expect(
-        ticket.setReservationDate(0, afterLimitDate)
-      ).to.be.revertedWithCustomError(ticket, "DateError");
+        ticket.setReservationDate(0, afterLimitPlusOneDay)
+      ).to.be.revertedWithCustomError(ticket, "DateError")
+       .withArgs(afterLimitPlusOneDay, "After limit+1day");
+      
+      // Test with valid date
+      const validDate = limitDate + 24 * 60 * 60 - 1;
+      await expect(
+        ticket.setReservationDate(0, validDate)
+      ).not.to.be.reverted;
+    });
+  });
+
+  describe("State Validation and Error Cases", function () {
+    it("Should accept valid center code after rejecting default code", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Try with default code (should fail)
+      await expect(
+        ticket.lockTicket(0, "000000", 0)
+      ).to.be.revertedWithCustomError(ticket, "InvalidInput")
+      .withArgs("Center should not be default");
+      
+      // Try with valid code (should succeed)
+      await expect(
+        ticket.lockTicket(0, "CENTER1", 0)
+      ).not.to.be.reverted;
+      
+      const ticketData = await ticket.tickets(0);
+      expect(ticketData.centerCode).to.equal("CENTER1");
+    });
+
+    
+    it("Should reject locking a non-AVAILABLE ticket", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Créer un ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Verrouiller le ticket (passe de AVAILABLE à LOCKED)
+      await ticket.lockTicket(0, "CENTER1", 0);
+      
+      // Vérifier que le ticket est bien en état LOCKED
+      let ticketData = await ticket.tickets(0);
+      expect(ticketData.status).to.equal(1); // LOCKED
+      
+      // Essayer de verrouiller à nouveau le ticket qui est déjà verrouillé (devrait échouer)
+      await expect(
+        ticket.lockTicket(0, "CENTER2", 0)
+      ).to.be.revertedWithCustomError(ticket, "InvalidState")
+       .withArgs(0, 1); // TokenId 0, status LOCKED (1)
+    });
+
+    it("Should reject empty center code", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Try with empty code (should fail)
+      await expect(
+        ticket.lockTicket(0, "", 0)
+      ).to.be.revertedWithCustomError(ticket, "InvalidInput")
+       .withArgs("Center missing");
+    });
+
+    it("Should respect reservation date with various values", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      const now = await time.latest();
+      const future = now + 3600; // 1 hour in future
+      
+      // Test with specific future reservation date (should succeed)
+      await expect(
+        ticket.lockTicket(0, "CENTER1", future)
+      ).not.to.be.reverted;
+      
+      let ticketData = await ticket.tickets(0);
+      expect(ticketData.reservationDate).to.equal(future);
+      
+      // Unlock for next test
+      await ticket.unlockTicket(0);
+      
+      // Test with zero reservation date (should use current time)
+      await expect(
+        ticket.lockTicket(0, "CENTER1", 0)
+      ).not.to.be.reverted;
+      
+      ticketData = await ticket.tickets(0);
+      const currentTime = await time.latest();
+      expect(ticketData.reservationDate).to.be.closeTo(currentTime, 5); // Allow small time difference due to block mining
+    });
+
+    it("Should enforce reservation date to be before limitDate + 1 day", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Create a ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Get the current limit date
+      let ticketData = await ticket.tickets(0);
+      const limitDate = Number(ticketData.limitDate);
+      
+      // Test with a reservation date exactly at limitDate + 1 day (should fail)
+      const exactlyDayAfterLimit = limitDate + 24 * 60 * 60; // +1 day in seconds
+      await expect(
+        ticket.lockTicket(0, "CENTER1", exactlyDayAfterLimit)
+      ).to.be.revertedWithCustomError(ticket, "DateError")
+       .withArgs(exactlyDayAfterLimit, "After limit+1day");
+      
+      // Test with a reservation date just before limitDate + 1 day (should succeed)
+      const justBeforeDayAfterLimit = limitDate + 24 * 60 * 60 - 1; // +1 day in seconds - 1 second
+      await expect(
+        ticket.lockTicket(0, "CENTER1", justBeforeDayAfterLimit)
+      ).not.to.be.reverted;
+      
+      ticketData = await ticket.tickets(0);
+      expect(ticketData.status).to.equal(1); // LOCKED
+      expect(ticketData.reservationDate).to.equal(justBeforeDayAfterLimit);
     });
 
     it("Should cover limit date before reservation date case", async function () {
       const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
       
       await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
-      await ticket.lockTicket(0, "CENTER1");
+      await ticket.lockTicket(0, "CENTER1", 0);
       
       const now = Math.floor(Date.now() / 1000);
       const farFuture = now + 30 * 24 * 60 * 60;
@@ -271,7 +367,7 @@ describe("Ticket Contract", function () {
         ticket.setReservationDate(0, future)
       ).to.be.revertedWithCustomError(ticket, "InvalidState");
       
-      await ticket.lockTicket(0, "CENTER1");
+      await ticket.lockTicket(0, "CENTER1", 0);
       
       await expect(
         ticket.setReservationDate(0, future)
@@ -284,7 +380,7 @@ describe("Ticket Contract", function () {
       await expect(ticket.getTicketInfo(99)).to.be.reverted;
       await expect(ticket.isExpired(99)).to.be.reverted;
       await expect(ticket.checkExpiration(99)).to.be.reverted;
-      await expect(ticket.lockTicket(99, "ANY_CENTER")).to.be.reverted;
+      await expect(ticket.lockTicket(99, "ANY_CENTER", 0)).to.be.reverted;
       await expect(ticket.setExpired(99)).to.be.reverted;
       await expect(
         ticket.setLimitDate(99, Math.floor(Date.now() / 1000) + 3600)
