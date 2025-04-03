@@ -11,7 +11,7 @@ export function formatTicketStatus(status) {
     3: 'Collector',
     4: 'Expiré'
   };
-  return statusMap[Number(status)] || 'Unknown';
+  return statusMap[Number(status)] || 'Inconnu';
 }
 
 // Helper to create ethers contract instance
