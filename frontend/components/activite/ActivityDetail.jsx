@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAccount } from 'wagmi';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ArrowLeft, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 // Données statiques pour le MVP basées sur les produits spécifiés
 const getMockActivity = (id) => {
@@ -25,7 +27,6 @@ const getMockActivity = (id) => {
       Accompagné d'un instructeur professionnel, vous décollerez à bord d'un avion jusqu'à 4000 mètres d'altitude. Après une courte préparation, vous vous élancerez dans le vide pour une chute libre d'environ 50 secondes à 200 km/h, suivie d'un vol sous voile d'environ 5 minutes.
       
       Cette activité ne nécessite aucune expérience préalable, simplement une bonne condition physique.`,
-      availableTickets: 5
     },
     {
       id: 1,
@@ -59,12 +60,61 @@ const getMockActivity = (id) => {
       • Un certificat de saut signé par votre instructeur
       
       Nos instructeurs VIP comptent parmi les plus expérimentés de notre équipe et sont spécialement formés pour rendre votre expérience inoubliable. Ce forfait est idéal pour les occasions spéciales comme les anniversaires ou pour simplement vivre l'expérience ultime du parachutisme.`,
-      availableTickets: 2
     }
   ];
   
   return activities.find(a => a.id === parseInt(id)) || activities[0];
 };
+
+// Fonction pour appeler l'API d'achat de ticket
+async function purchaseTicket(activityCode, walletAddress) {
+  try {
+    // Pour le développement et test local, utiliser la simulation
+    if (process.env.NEXT_PUBLIC_USE_MOCK === 'true') {
+      console.log(`Simulation: Achat du ticket ${activityCode} pour le wallet ${walletAddress}`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const tokenId = Math.floor(Math.random() * 1000);
+      return { 
+        success: true, 
+        ticketId: tokenId,
+        txHash: '0x' + [...Array(64)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')
+      };
+    }
+    
+    // Appel direct à l'Edge Function Supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Configuration Supabase manquante');
+    }
+    
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/create-ticket`;
+    
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`
+      },
+      body: JSON.stringify({
+        productCode: activityCode, 
+        walletAddress: walletAddress
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Erreur lors de l\'achat du ticket');
+    }
+    
+    const data = await response.json();
+    return { success: true, ticketId: data.tokenId, txHash: data.txHash };
+  } catch (error) {
+    console.error('Erreur lors de l\'achat:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 /**
  * Composant pour afficher les détails d'une activité
@@ -76,6 +126,7 @@ export default function ActivityDetail({ activityId }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
   const [ticketId, setTicketId] = useState(null);
+  const { address } = useAccount();
   
   // Retourner à la liste des activités
   const goBack = () => {
@@ -84,20 +135,34 @@ export default function ActivityDetail({ activityId }) {
   
   // Ouvrir la boîte de dialogue de confirmation d'achat
   const openConfirmationDialog = () => {
+    if (!address) {
+      toast.error('Veuillez connecter votre wallet pour acheter un ticket');
+      return;
+    }
     setDialogOpen(true);
   };
   
   // Gérer l'achat du ticket
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
     setIsProcessing(true);
     
-    // Simuler un appel API pour l'achat
-    setTimeout(() => {
+    try {
+      // Appeler la fonction qui interagit avec l'API
+      const result = await purchaseTicket(activity.code, address);
+      
+      if (result.success) {
+        setIsPurchased(true);
+        setTicketId(result.ticketId);
+        toast.success('Ticket acheté avec succès!');
+      } else {
+        toast.error(result.error || 'Erreur lors de l\'achat');
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'achat: ' + error.message);
+    } finally {
       setIsProcessing(false);
-      setIsPurchased(true);
-      setTicketId(Math.floor(Math.random() * 1000)); // ID fictif pour le MVP
       setDialogOpen(false);
-    }, 1500);
+    }
   };
   
   return (
@@ -142,9 +207,6 @@ export default function ActivityDetail({ activityId }) {
           <Card>
             <CardHeader>
               <CardTitle>Acheter cette activité</CardTitle>
-              <CardDescription>
-                {activity.availableTickets} billets disponibles
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
@@ -196,6 +258,10 @@ export default function ActivityDetail({ activityId }) {
               Une fois votre achat effectué, vous pourrez réserver une date auprès d'un centre partenaire. 
               Le ticket sera valable pour une durée de 18 mois à partir de la date d'achat.
             </p>
+            
+            <div className="mt-2 p-2 bg-slate-100 rounded">
+              <p className="text-xs text-slate-500">Wallet connecté: {address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : 'Non connecté'}</p>
+            </div>
           </div>
           
           <DialogFooter>
@@ -204,7 +270,7 @@ export default function ActivityDetail({ activityId }) {
             </Button>
             <Button 
               onClick={handlePurchase}
-              disabled={isProcessing}
+              disabled={isProcessing || !address}
             >
               {isProcessing ? 'Traitement en cours...' : 'Confirmer l\'achat'}
             </Button>

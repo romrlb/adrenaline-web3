@@ -16,7 +16,6 @@ const activities = [
     price: '279',
     image: 'activity-P01T01.png',
     description: 'Vivez l\'expérience unique d\'un saut en parachute accompagné d\'un instructeur professionnel à 4000m d\'altitude.',
-    availableTickets: 5
   },
   {
     id: 1,
@@ -25,7 +24,6 @@ const activities = [
     price: '359',
     image: 'activity-P01T02.png',
     description: 'Saut en parachute tandem avec service vidéo inclus. Immortalisez votre expérience avec une vidéo professionnelle.',
-    availableTickets: 3
   },
   {
     id: 2,
@@ -34,7 +32,6 @@ const activities = [
     price: '429',
     image: 'activity-P01T03.png',
     description: 'Expérience premium incluant un traitement prioritaire, une altitude de saut plus élevée et un service photo/vidéo complet.',
-    availableTickets: 2
   }
 ];
 
@@ -64,7 +61,7 @@ export default function ActivitiesPage() {
             <CardHeader>
               <CardTitle>{activity.name}</CardTitle>
               <div className="text-xs text-gray-500">
-                Code: {activity.code} | {activity.availableTickets} billets disponibles
+                Code: {activity.code}
               </div>
             </CardHeader>
             
