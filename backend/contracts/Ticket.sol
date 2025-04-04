@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
@@ -11,7 +12,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
  * @dev Implementation of the Ticket contract
  * @notice This contract manages the lifecycle of ticket NFTs with different states
  */
-contract Ticket is ERC721, ERC721URIStorage, AccessControl {
+contract Ticket is ERC721, ERC721URIStorage, ERC721Enumerable, AccessControl {
     using Strings for uint256;
 
     error InvalidId(uint256 tokenId);
@@ -39,13 +40,19 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
         string centerCode;
         uint256 price;
         uint256 limitDate;
-        uint256 reservationDate; 
+        uint256 reservationDate;
     }
 
     mapping(uint256 => TicketData) public tickets;
     
     // Mapping from productCode to its IPFS URI
     mapping(string => string) private _productCodeURIs;
+
+    // Maps reference codes to token IDs
+    mapping(string => uint256) public referenceCodeToTokenId;
+    
+    // Maps token IDs to reference codes (private for internal use only)
+    mapping(uint256 => string) private _tokenIdToReferenceCode;
     
     // Global metadata URI for the collection
     string private _globalMetadataURI;
@@ -104,6 +111,13 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
         
         uint256 tokenId = _tokenIdCounter++;
         uint256 limitDate = block.timestamp + 18 * 30 days;
+
+        // Generate a simple reference code of exactly 10 characters
+        string memory referenceCode = _generateReferenceCode(tokenId);
+        
+        // Store bidirectional mappings
+        referenceCodeToTokenId[referenceCode] = tokenId;
+        _tokenIdToReferenceCode[tokenId] = referenceCode;
         
         tickets[tokenId] = TicketData({
             status: NFTStatus.AVAILABLE,
@@ -126,7 +140,7 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
      * @notice Returns the total number of tokens in existence
      * @return uint256 representing the total supply of tokens
      */
-    function totalSupply() external view returns (uint256) {
+    function totalSupply() public view override(ERC721Enumerable) returns (uint256) {
         return _totalSupply;
     }
     
@@ -168,7 +182,11 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
      * @param centerCode Code of the center making the reservation
      * @param reservationDate Unix timestamp for the reservation date (0 to use current timestamp)
      */
-    function lockTicket(uint256 tokenId, string calldata centerCode, uint256 reservationDate) external onlyAdmin ticketExists(tokenId) {
+    function lockTicket(
+        uint256 tokenId, 
+        string calldata centerCode, 
+        uint256 reservationDate
+    ) external onlyAdmin ticketExists(tokenId) {
         if (checkExpiration(tokenId)) revert InvalidState(tokenId, uint8(NFTStatus.EXPIRED));
         if (keccak256(bytes(centerCode)) == keccak256(bytes(DEFAULT_CENTER_CODE))) revert InvalidInput("Center should not be default");
         TicketData storage ticket = tickets[tokenId];
@@ -284,12 +302,16 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
     /**
      * @notice Updates wallet address when token is transferred
      * @dev Internal function to keep ticket.wallet field updated on transfers
+     * @param to Address of the recipient
+     * @param tokenId ID of the token
+     * @param auth Address of the authorized address
+     * @return The address of the previous owner
      */
     function _update(
         address to,
         uint256 tokenId,
         address auth
-    ) internal virtual override returns (address) {
+    ) internal virtual override(ERC721, ERC721Enumerable) returns (address) {
         if (to == address(0)) revert ZeroAddress();
         
         address from = super._update(to, tokenId, auth);
@@ -304,9 +326,13 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
     }
     
     /**
-     * @dev Override the supportsInterface function to include the ERC165 interface for AccessControl and ERC721URIStorage
+     * @notice Override the supportsInterface function to include the ERC165 interface for AccessControl,ERC721URIStorage and ERC721Enumerable
+     * @param interfaceId The interface ID to check
+     * @return True if the interface is supported, false otherwise
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, ERC721URIStorage, AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) 
+    public view virtual override(ERC721, ERC721URIStorage, AccessControl, ERC721Enumerable) 
+    returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -412,5 +438,98 @@ contract Ticket is ERC721, ERC721URIStorage, AccessControl {
             return _globalMetadataURI;
         }
         return uri;
+    }
+    
+    /**
+     * @notice Required override when using ERC721Enumerable
+     * @param account Address of the account
+     * @param amount Amount of tokens to increase
+     */
+    function _increaseBalance(
+        address account, 
+        uint128 amount
+    ) internal virtual override(ERC721, ERC721Enumerable) {
+        super._increaseBalance(account, amount);
+    }
+
+    /**
+     * @notice Gets the tickets of an owner
+     * @param owner Address of the owner
+     * @return The tickets of the owner
+     */
+    function getTicketsOfOwner(address owner) external view returns (uint256[] memory) {
+        uint256 ownerTokenCount = balanceOf(owner);
+        uint256[] memory tokenIds = new uint256[](ownerTokenCount);
+        
+        for (uint256 i = 0; i < ownerTokenCount; i++) {
+            tokenIds[i] = tokenOfOwnerByIndex(owner, i);
+        }
+        return tokenIds;
+    }
+
+    /**
+     * @notice Gets the reference code for a given token ID
+     * @param tokenId The token ID to lookup
+     * @return The reference code associated with the token ID
+     */
+    function getReferenceCode(uint256 tokenId) external view onlyAdmin ticketExists(tokenId) returns (string memory) {
+        string memory referenceCode = _tokenIdToReferenceCode[tokenId];
+        if (bytes(referenceCode).length == 0) revert InvalidInput("No reference code found");
+        return referenceCode;
+    }
+
+    /**
+     * @notice Generate a reference code of exactly 12 characters
+     * @param tokenId The token ID to use as a seed
+     * @return A string containing the generated reference code
+     */
+    function _generateReferenceCode(uint256 tokenId) private view returns (string memory) {
+        // Define the characters to use (alphanumeric only)
+        bytes memory characterSet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        // Build a 12-character code
+        bytes memory code = new bytes(12);
+        
+        // Encode tokenId in the first 6 characters (supports up to 2.1 billion unique tickets)
+        // This guarantees uniqueness based on tokenId
+        uint256 idPart = tokenId;
+        for (uint8 i = 0; i < 6; i++) {
+            code[5 - i] = characterSet[idPart % 36];
+            idPart = idPart / 36;
+        }
+        
+        // Generate 6 random characters for the rest of the code
+        // This adds entropy even for sequential tokenIds
+        bytes32 hash = keccak256(abi.encodePacked(
+            block.timestamp,
+            block.prevrandao,
+            tokenId,
+            block.number,
+            msg.sender
+        ));
+        
+        for (uint8 i = 0; i < 6; i++) {
+            uint8 index = uint8(uint256(hash) >> (i * 8)) % 36;
+            code[i + 6] = characterSet[index];
+        }
+        
+        return string(code);
+    }
+
+    /**
+     * @notice Gets the token ID associated with a reference code
+     * @param referenceCode The reference code to look up
+     * @return The tokenId that corresponds to the reference code
+     */
+    function getTokenIdByReferenceCode(string calldata referenceCode) external view returns (uint256) {
+        uint256 tokenId = referenceCodeToTokenId[referenceCode];
+        string memory storedRefCode = _tokenIdToReferenceCode[tokenId];
+        bytes memory refCodeBytes = bytes(storedRefCode);
+
+        if (refCodeBytes.length == 0 || 
+            keccak256(bytes(referenceCode)) != keccak256(refCodeBytes)) {
+            revert InvalidInput("Invalid reference code");
+        }
+        
+        return tokenId;
     }
 }

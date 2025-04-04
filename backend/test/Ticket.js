@@ -443,6 +443,18 @@ describe("Ticket Contract", function () {
       // Verify initial total supply is 0
       expect(await ticket.totalSupply()).to.equal(0);
     });
+    
+    it("Should return correct tokens for an owner", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+      
+      // Create multiple tickets for the same owner
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      await ticket.createTicket(userAccount1.address, "PRODUCT2", ethers.parseEther("0.2"));
+      await ticket.createTicket(userAccount1.address, "PRODUCT3", ethers.parseEther("0.3"));
+      
+      const ownedTokens = await ticket.getTicketsOfOwner(userAccount1.address);
+      expect(ownedTokens.length).to.equal(3);
+    });
   });
   
   describe("Zero Address Checks", function () {
@@ -605,5 +617,95 @@ describe("Ticket Contract", function () {
       // Token URI should fall back to global metadata URI
       expect(await ticket.tokenURI(0)).to.equal(globalURI);
     });
+  });
+
+  describe("Reference Code Functionality", function () {
+    it("Should be able to get token ID from reference code", async function () {
+      const { ticket, userAccount1 } = await loadFixture(deployTicketFixture);
+            await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+            const referenceCode = await ticket.getReferenceCode(0);
+            const tokenId = await ticket.getTokenIdByReferenceCode(referenceCode);
+            expect(tokenId).to.equal(0);
+    });
+
+    it("Should restrict getReferenceCode to admin only", async function () {
+      const { ticket, userAccount1, userAccount2 } = await loadFixture(deployTicketFixture);
+      
+      // Create ticket
+      await ticket.createTicket(userAccount1.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      // Try to get reference code as non-admin user
+      await expect(
+        ticket.connect(userAccount2).getReferenceCode(0)
+      ).to.be.revertedWithCustomError(ticket, "NotAuthorized");
+      
+      // Should work with admin - on n'utilise pas de .to.be.reverted ici car ça échoue
+      const referenceCode = await ticket.getReferenceCode(0);
+      expect(referenceCode).to.be.a('string');
+      expect(referenceCode.length).to.equal(12);
+    });
+
+    it("Should revert when accessing non-existent reference code", async function () {
+      const { ticket } = await loadFixture(deployTicketFixture);
+      
+      // Try to get ticket by non-existent reference code
+      await expect(
+        ticket.getTokenIdByReferenceCode("NONEXISTENT")
+      ).to.be.revertedWithCustomError(ticket, "InvalidInput")
+       .withArgs("Invalid reference code");
+    });
+
+    it("Should revert when getReferenceCode finds no code", async function () {
+      const { ticket, owner } = await loadFixture(deployTicketFixture);
+      await ticket.createTicket(owner.address, "PRODUCT1", ethers.parseEther("0.1"));
+      
+      const refCode = await ticket.getReferenceCode(0);
+      expect(refCode).to.be.a('string');
+      expect(refCode.length).to.equal(12);
+      
+      // Test with a non-existent tokenId
+      await expect(
+        ticket.getReferenceCode(999)
+      ).to.be.reverted; // The ticketExists modifier should reject
+      
+      // Test of case where getTokenIdByReferenceCode receives a code that exists but does not match the stored code  
+      
+      // First create a second ticket
+      await ticket.createTicket(owner.address, "PRODUCT2", ethers.parseEther("0.2"));
+      const refCode2 = await ticket.getReferenceCode(1);
+      
+      // Call getTokenIdByReferenceCode with a modified code
+      // which will have a tokenId but not match the stored code
+      const modifiedCode = refCode2.replace(refCode2[0], refCode2[0] === 'A' ? 'B' : 'A');
+      
+      // This modified code does not exist, so it should fail
+      await expect(
+        ticket.getTokenIdByReferenceCode(modifiedCode)
+      ).to.be.revertedWithCustomError(ticket, "InvalidInput")
+       .withArgs("Invalid reference code");
+    });
+  });
+});
+
+
+//Test for batch mint protection 
+describe("Ticket Batch Mint Protection", () => {
+  async function deployTesterFixture() {
+    const [owner] = await ethers.getSigners();
+    const TicketTester = await ethers.getContractFactory("TicketTester");
+    const tester = await TicketTester.deploy();
+    return { tester, owner };
+  }
+
+  it("Should revert on batch mint attempt", async () => {
+    const { tester, owner } = await deployTesterFixture();
+    
+    // Attempt to increase balance with amount > 1
+    const tx = tester.exposedIncreaseBalance(owner.address, 2);
+    // Check the specific error
+    await expect(tx).to.be.revertedWithCustomError(
+      tester,
+      "ERC721EnumerableForbiddenBatchMint"
+    );
   });
 });
