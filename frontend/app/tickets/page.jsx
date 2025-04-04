@@ -3,76 +3,226 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { formatTicketStatus } from '@/lib/contractService';
+import { useAccount } from 'wagmi';
+import { getUserTickets } from '@/lib/contractService';
+import { useTicketMetadata } from '@/hooks/useBlockchain';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useWalletClient } from 'wagmi';
+import { ReloadIcon, ExternalLinkIcon } from '@radix-ui/react-icons';
+import { formatEther } from 'viem';
 
-const getStatusColor = (status) => {
+// Utility function to get status information
+const getStatusInfo = (status) => {
   const statusMap = {
-    AVAILABLE: 'bg-green-100 text-green-800',
-    LOCKED: 'bg-blue-100 text-blue-800',
-    USED: 'bg-gray-100 text-gray-800',
+    0: { text: 'Disponible', color: 'bg-green-100 text-green-800 border-green-200' },
+    1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+    2: { text: 'En vente', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+    3: { text: 'Collector', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+    4: { text: 'Expiré', color: 'bg-red-100 text-red-800 border-red-200' }
   };
-  
-  return statusMap[status] || 'bg-yellow-100 text-yellow-800';
+  return statusMap[status] || { text: 'Inconnu', color: 'bg-gray-100 text-gray-800 border-gray-200' };
 };
 
-/**
- * Pour le MVP, nous utilisons des données statiques
- */
-const getMockTickets = () => {
-  return [
-    {
-      id: 1,
-      tokenId: 1,
-      name: 'Saut en parachute tandem',
-      activityCode: 'P01T01',
-      price: '279',
-      image: 'activity-P01T01.png',
-      purchaseDate: '12/04/2023',
-      status: 'Disponible',
-    },
-    {
-      id: 2,
-      tokenId: 2,
-      name: 'Saut en parachute tandem+vidéo',
-      activityCode: 'P01T02',
-      price: '359',
-      image: 'activity-P01T02.png',
-      purchaseDate: '15/04/2023',
-      status: 'Verrouillé',
-    },
-    {
-      id: 3,
-      tokenId: 3,
-      name: 'Saut en parachute tandem VIP',
-      activityCode: 'P01T03',
-      price: '429',
-      image: 'activity-P01T03.png',
-      purchaseDate: '20/04/2023',
-      status: 'Collector',
-    }
-  ];
+// Utility function for date formatting
+const formatDateTime = (timestamp) => {
+  if (!timestamp || timestamp === '0') return '-';
+  const date = new Date(Number(timestamp) * 1000);
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
 };
+
+// Check if timestamp is expired
+const isExpired = (timestamp) => {
+  if (!timestamp || timestamp === '0') return false;
+  return Number(timestamp) * 1000 < Date.now();
+};
+
+// Check if reservation date is soon (within next 48 hours)
+const isReservationSoon = (timestamp) => {
+  if (!timestamp || timestamp === '0') return false;
+  const reservationTime = Number(timestamp) * 1000;
+  const now = Date.now();
+  const hoursRemaining = (reservationTime - now) / (1000 * 60 * 60);
+  return reservationTime > now && hoursRemaining <= 48;
+};
+
+// Format price from wei to ETH
+const formatPrice = (priceInWei) => {
+  if (!priceInWei) return '0 EUR';
+  const priceInEth = formatEther(priceInWei);
+  return `${parseFloat(priceInEth).toFixed(0)} EUR`;
+};
+
+// Composant pour chaque ticket individuel
+function TicketItem({ ticket }) {
+  const [imageError, setImageError] = useState(false);
+  const { data: metadata, isLoading: isLoadingMetadata } = useTicketMetadata(ticket.id);
+  const status = getStatusInfo(Number(ticket.status));
+
+  const getImageSource = () => {
+    if (metadata?.image && !imageError) {
+      return metadata.image;
+    }
+    return `/images/activities/activity-${ticket.productCode || 'default'}.png`;
+  };
+
+  const handleImageError = () => {
+    console.warn(`Failed to load image for ticket #${ticket.id}`);
+    setImageError(true);
+  };
+
+  return (
+    <Card className="overflow-hidden border-2 border-gray-400 hover:border-gray-600 shadow-sm hover:shadow flex flex-col">
+      {/* Image avec état de chargement */}
+      <div className="relative w-full aspect-square bg-gray-100">
+        {isLoadingMetadata ? (
+          <div className="flex items-center justify-center h-full w-full">
+            <ReloadIcon className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        ) : (
+          <Image 
+            src={getImageSource()}
+            alt={metadata?.name || `Ticket #${ticket.id} - ${ticket.productCode || ''}`}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            style={{ objectFit: 'cover' }}
+            className="transition-all hover:scale-105"
+            onError={handleImageError}
+            priority={Number(ticket.id) < 5} // Priority loading for first few tickets
+            loading={Number(ticket.id) < 5 ? "eager" : "lazy"}
+            quality={80}
+          />
+        )}
+        
+        {/* Badge de statut */}
+        <div className="absolute top-3 right-3">
+          <Badge variant="outline" className={`${status.color} shadow-sm`}>
+            {status.text}
+          </Badge>
+        </div>
+      </div>
+      
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">Ticket #{ticket.id}</CardTitle>
+            <CardDescription>Code: {ticket.productCode || 'N/A'}</CardDescription>
+          </div>
+        </div>
+        
+        {/* Métadonnées du ticket si disponibles */}
+        {metadata && metadata.name && (
+          <div className="mt-2">
+            <h3 className="font-medium">{metadata.name}</h3>
+            {metadata.description && (
+              <p className="text-xs text-gray-500 line-clamp-2 mt-1">{metadata.description}</p>
+            )}
+          </div>
+        )}
+      </CardHeader>
+      
+      <CardContent className="pb-2 pt-0 flex-grow">
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Centre:</span>
+            <span className="font-medium">
+              {ticket.centerCode && ticket.centerCode !== '000000' ? ticket.centerCode : '-'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Prix:</span>
+            <span className="font-medium">
+              {formatPrice(ticket.price)}
+            </span>
+          </div>
+          {ticket.limitDate && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Date limite:</span>
+              <span className={`font-medium ${isExpired(ticket.limitDate) ? 'text-red-600' : ''}`}>
+                {formatDateTime(ticket.limitDate)}
+              </span>
+            </div>
+          )}
+          {ticket.reservationDate && Number(ticket.reservationDate) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Réservation:</span>
+              <span className={`font-medium ${isReservationSoon(ticket.reservationDate) ? 'text-orange-600' : ''}`}>
+                {formatDateTime(ticket.reservationDate)}
+              </span>
+            </div>
+          )}
+          
+          {/* Lien vers les métadonnées */}
+          {metadata && metadata.uri && (
+            <div className="flex justify-end pt-1">
+              <a 
+                href={metadata.uri.startsWith('ipfs://') 
+                  ? `https://ipfs.io/ipfs/${metadata.uri.substring(7)}`
+                  : metadata.uri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs flex items-center text-blue-600 hover:text-blue-800"
+              >
+                Voir les metadata
+                <ExternalLinkIcon className="h-3 w-3 ml-1" />
+              </a>
+            </div>
+          )}
+        </div>
+      </CardContent>
+      
+      <CardFooter className="pt-2 mt-auto border-t border-gray-100 bg-gray-50">
+        <Button asChild className="w-full">
+          <Link href={`/tickets/${ticket.id}`}>
+            Voir les détails
+          </Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
 
 export default function TicketsPage() {
-  const { data: wallet } = useWalletClient();
+  const { address, isConnected } = useAccount();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  // Simuler un chargement asynchrone
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setTickets(getMockTickets());
-      setLoading(false);
-    }, 1000);
+  const fetchTickets = async () => {
+    if (!isConnected || !address) return;
     
-    return () => clearTimeout(timer);
-  }, []);
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await getUserTickets(address);
+      if (result.success) {
+        setTickets(result.tickets || []);
+      } else {
+        setError(result.error || 'Une erreur est survenue lors du chargement des tickets');
+        console.error('Error fetching tickets:', result.error);
+      }
+    } catch (err) {
+      setError('Une erreur est survenue lors du chargement des tickets');
+      console.error('Error fetching tickets:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
   
-  if (!wallet) {
+  useEffect(() => {
+    fetchTickets();
+  }, [address, isConnected]);
+  
+  const handleRefresh = () => {
+    fetchTickets();
+  };
+  
+  if (!isConnected) {
     return (
       <div className="container mx-auto py-12 text-center">
         <h1 className="text-2xl font-bold mb-6">Mes Tickets</h1>
@@ -87,21 +237,26 @@ export default function TicketsPage() {
     );
   }
   
-  if (loading) {
+  if (loading && tickets.length === 0) {
     return (
       <div className="container mx-auto py-12">
         <h1 className="text-2xl font-bold mb-6">Mes Tickets</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="bg-gray-200 h-48 rounded-t-lg"></div>
-              <div className="bg-gray-100 p-4 rounded-b-lg space-y-2">
-                <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                <div className="h-10 bg-gray-200 rounded w-full mt-4"></div>
-              </div>
-            </div>
-          ))}
+        <div className="py-8 text-center">
+          <ReloadIcon className="inline-block h-8 w-8 animate-spin mb-4" />
+          <p>Chargement des tickets...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="container mx-auto py-12 text-center">
+        <h1 className="text-2xl font-bold mb-6">Mes Tickets</h1>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+          <h2 className="text-lg font-medium text-red-800 mb-2">Erreur de chargement</h2>
+          <p className="text-red-700 mb-4">{error}</p>
+          <Button onClick={handleRefresh}>Réessayer</Button>
         </div>
       </div>
     );
@@ -126,42 +281,36 @@ export default function TicketsPage() {
   
   return (
     <div className="container mx-auto py-12">
-      <h1 className="text-2xl font-bold mb-6">Mes Tickets</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tickets.map((ticket) => (
-          <Card key={ticket.id} className="overflow-hidden flex flex-col">
-            <div className="relative h-48">
-              <Image
-                src={`/images/activities/${ticket.image}`}
-                alt={ticket.name}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              />
-              <div className="absolute top-2 right-2">
-                <Badge className={`px-2 py-1 ${getStatusColor(ticket.status)}`}>
-                  {formatTicketStatus(ticket.status)}
-                </Badge>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Mes Tickets</CardTitle>
+              <CardDescription>Vous possédez {tickets.length} ticket(s)</CardDescription>
             </div>
-            
-            <CardContent className="flex-grow pt-6">
-              <h2 className="font-bold text-lg">{ticket.name}</h2>
-              <p className="text-sm text-gray-500">Code: {ticket.activityCode}</p>
-              <p className="text-sm text-gray-500">Acheté le: {ticket.purchaseDate}</p>
-            </CardContent>
-            
-            <CardFooter className="pt-0 pb-6">
-              <Button asChild className="w-full">
-                <Link href={`/tickets/${ticket.id}`}>
-                  Voir les détails
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
+            <Button onClick={handleRefresh} disabled={loading} variant="outline" size="sm">
+              {loading ? (
+                <>
+                  <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                  Chargement...
+                </>
+              ) : (
+                <>
+                  <ReloadIcon className="mr-2 h-4 w-4" />
+                  Rafraîchir
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
+            {tickets.map((ticket) => (
+              <TicketItem key={ticket.id} ticket={ticket} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 } 

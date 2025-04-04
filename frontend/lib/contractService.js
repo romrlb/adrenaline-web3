@@ -150,36 +150,73 @@ export async function getUserTickets(address) {
     const contract = await getContract();
     
     // Get the number of tokens owned by the user
-    const balance = await contract.balanceOf(address);
-    console.log(`User ${address} has ${balance.toString()} tickets`);
-    
-    // Get each token ID using tokenOfOwnerByIndex
-    const tokenIds = [];
-    for (let i = 0; i < balance; i++) {
-      const tokenId = await contract.tokenOfOwnerByIndex(address, i);
-      tokenIds.push(tokenId.toString());
-    }
-    
-    console.log(`Retrieved token IDs: ${tokenIds.join(', ')}`);
+    console.log(`Fetching tickets for user ${address}...`);
+    const tokenIds = await contract.getTicketsOfOwner(address);
+    console.log(`Retrieved ${tokenIds.length} token IDs for user ${address}`);
     
     // Get the details for each ticket
     const ticketsPromises = tokenIds.map(id => 
-      getTicketInfo(id)
+      getTicketInfo(id.toString())
         .then(result => result.success ? result.ticketInfo : null)
-        .catch(() => null)
+        .catch((err) => {
+          console.error(`Error fetching ticket #${id}:`, err);
+          return null;
+        })
     );
     
     const ticketsResults = await Promise.all(ticketsPromises);
     const tickets = ticketsResults.filter(ticket => ticket !== null);
     
+    console.log(`Successfully loaded ${tickets.length} of ${tokenIds.length} tickets`);
+    
     return {
       success: true,
       tickets
     };
-  } catch (enumError) {
-    console.error('Error using ERC721Enumerable functions:', enumError);
+  } catch (error) {
+    console.error('Error loading user tickets:', error);
     
-    throw enumError;
+    // Fallback to old method using balanceOf and tokenOfOwnerByIndex if necessary
+    try {
+      console.log('Falling back to legacy method (balanceOf + tokenOfOwnerByIndex)');
+      const contract = await getContract();
+      
+      // Get the number of tokens owned by the user
+      const balance = await contract.balanceOf(address);
+      console.log(`User ${address} has ${balance.toString()} tickets (legacy method)`);
+      
+      // Get each token ID using tokenOfOwnerByIndex
+      const tokenIds = [];
+      for (let i = 0; i < balance; i++) {
+        const tokenId = await contract.tokenOfOwnerByIndex(address, i);
+        tokenIds.push(tokenId.toString());
+      }
+      
+      console.log(`Retrieved token IDs: ${tokenIds.join(', ')}`);
+      
+      // Get the details for each ticket
+      const ticketsPromises = tokenIds.map(id => 
+        getTicketInfo(id)
+          .then(result => result.success ? result.ticketInfo : null)
+          .catch(() => null)
+      );
+      
+      const ticketsResults = await Promise.all(ticketsPromises);
+      const tickets = ticketsResults.filter(ticket => ticket !== null);
+      
+      return {
+        success: true,
+        tickets
+      };
+    } catch (fallbackError) {
+      console.error('Error using fallback method for getting user tickets:', fallbackError);
+      
+      return {
+        success: false,
+        error: error.message || 'Failed to retrieve tickets',
+        tickets: []
+      };
+    }
   }
 }
 
@@ -243,7 +280,7 @@ export async function fetchMetadata(uri) {
 // Export the main functions
 export default {
   getTicketInfo,
-  // getUserTickets,
+  getUserTickets,
   getTicketURI,
   fetchMetadata,
   formatTicketStatus
