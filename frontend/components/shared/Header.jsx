@@ -46,9 +46,9 @@ const Header = () => {
                 <Link href="/activities" className={getNavLinkClasses('/activities')}>
                   Activités
                 </Link>
-                <Link href="/center" className={getNavLinkClasses('/center')}>
+                {/* <Link href="/center" className={getNavLinkClasses('/center')}>
                   Espace Centre
-                </Link>
+                </Link> */}
                 <Link href="/tickets" className={getNavLinkClasses('/tickets')}>
                   Mes Tickets
                 </Link>
@@ -93,9 +93,9 @@ const Header = () => {
                 <Link href="/admin" className={getNavLinkClasses('/admin')}>
                   Admin
                 </Link>
-                <Link href="/center" className={getNavLinkClasses('/center')}>
+                {/* <Link href="/center" className={getNavLinkClasses('/center')}>
                   Espace Centre
-                </Link>
+                </Link> */}
                 <Link href="/tickets" className={getNavLinkClasses('/tickets')}>
                   Mes Tickets
                 </Link>

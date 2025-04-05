@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-// Données statiques pour le MVP basées sur les produits spécifiés
+// Mock data waiting supabase
 const activities = [
   {
     id: 0,

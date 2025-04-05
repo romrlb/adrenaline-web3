@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 /**
- * Composant pour afficher une carte d'activité
+ * Component to display an activity card
  */
 export default function ActivityCard({ activity }) {
   return (

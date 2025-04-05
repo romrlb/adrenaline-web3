@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { formatDateTime, isExpired, isDateSoon, timeFromNow, daysRemaining } from '@/utils/date';
 import { AlertCircle, Calendar, ArrowLeft, Check, X, Info } from 'lucide-react';
 
-// Données statiques pour le MVP
+// Static data waiting supabase
 const getMockTicket = (id) => ({
   id: parseInt(id),
   productCode: id === "0" ? "P01T01" : "P01T02",
@@ -35,7 +35,7 @@ const getMockTicket = (id) => ({
   }
 });
 
-// Mapping pour les statuts de tickets
+// Mapping for ticket statuses
 const getStatusInfo = (status) => {
   const statusMap = {
     0: { text: 'Disponible', color: 'bg-green-100 text-green-800 border-green-200' },
@@ -48,7 +48,7 @@ const getStatusInfo = (status) => {
 };
 
 /**
- * Composant pour afficher et gérer les détails d'un ticket spécifique
+ * Component to display and manage the details of a specific ticket
  */
 export default function TicketDetail({ ticketId }) {
   const router = useRouter();
@@ -62,29 +62,27 @@ export default function TicketDetail({ ticketId }) {
   const isSoon = isDateSoon(ticket.reservationDate);
   const daysLeft = daysRemaining(ticket.limitDate);
   
-  // Ouvrir la boîte de dialogue pour une action spécifique
   const openDialog = (action) => {
     setDialogAction(action);
     setDialogOpen(true);
   };
   
-  // Fermer la boîte de dialogue
   const closeDialog = () => {
     setDialogOpen(false);
     setDialogAction(null);
   };
   
-  // Gérer l'action sur le ticket (simulation pour le MVP)
+  // Handle the action on the ticket
   const handleAction = async () => {
     setProcessing(true);
     
-    // Simuler un traitement
+    // Simulate a processing
     setTimeout(() => {
       if (dialogAction === 'use') {
-        // Marquer le ticket comme utilisé (dans un vrai cas, ce serait une transition vers l'état "Collector")
+        // Mark the ticket as used (in a real case, this would be a transition to the "Collector" state)
         setTicket(prev => ({ ...prev, status: 3 }));
       } else if (dialogAction === 'cancel') {
-        // Annuler la réservation (dans un vrai cas, ce serait une transition vers l'état "Disponible")
+        // Cancel the reservation (in a real case, this would be a transition to the "Available" state)
         setTicket(prev => ({ ...prev, status: 0 }));
       }
       
@@ -93,14 +91,14 @@ export default function TicketDetail({ ticketId }) {
     }, 1500);
   };
   
-  // Retourner à la liste des tickets
+  // Return to the list of tickets
   const goBack = () => {
     router.push('/center');
   };
   
   return (
     <div className="container mx-auto py-6 space-y-6">
-      {/* En-tête avec bouton retour */}
+      {/* Header with back button */}
       <div className="flex items-center space-x-2">
         <Button variant="outline" size="icon" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />
@@ -108,7 +106,7 @@ export default function TicketDetail({ ticketId }) {
         <h1 className="text-2xl font-bold">Détails du ticket #{ticket.id}</h1>
       </div>
       
-      {/* Affichage du statut et alerte si nécessaire */}
+      {/* Display the status and alert if necessary */}
       <div className="flex justify-between items-center">
         <Badge className={status.color + " text-sm py-1 px-3"}>
           {status.text}
@@ -135,9 +133,9 @@ export default function TicketDetail({ ticketId }) {
         )}
       </div>
       
-      {/* Informations principales du ticket */}
+      {/* Main ticket information */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Colonne 1: Image et détails basiques */}
+        {/* Column 1: Image and basic details */}
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle>Aperçu</CardTitle>
@@ -174,13 +172,13 @@ export default function TicketDetail({ ticketId }) {
           </CardContent>
         </Card>
         
-        {/* Colonne 2: Détails de la réservation */}
+        {/* Column 2: Reservation details */}
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Informations de réservation</CardTitle>
+            <CardTitle>Reservation information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Dates importantes */}
+            {/* Important dates */}
             <div className="space-y-2">
               <h3 className="font-semibold flex items-center">
                 <Calendar className="mr-2 h-4 w-4" />
@@ -211,9 +209,9 @@ export default function TicketDetail({ ticketId }) {
             
             <Separator />
             
-            {/* Restrictions et conditions */}
+            {/* Restrictions and conditions */}
             <div className="space-y-2">
-              <h3 className="font-semibold">Restrictions et conditions</h3>
+              <h3 className="font-semibold">Restrictions and conditions</h3>
               <div className="pl-6 space-y-2 text-sm">
                 <div>
                   <span className="font-medium">Âge minimum:</span> {ticket.product.minAge} ans
@@ -229,9 +227,9 @@ export default function TicketDetail({ ticketId }) {
             
             <Separator />
             
-            {/* Informations wallet */}
+            {/* Wallet information */}
             <div className="space-y-2">
-              <h3 className="font-semibold">Informations blockchain</h3>
+              <h3 className="font-semibold">Blockchain information</h3>
               <div className="pl-6 space-y-2 text-sm">
                 <div>
                   <span className="font-medium">Wallet associé:</span>
@@ -246,8 +244,8 @@ export default function TicketDetail({ ticketId }) {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row gap-3 justify-end">
-            {/* Actions conditionnelles selon le statut */}
-            {ticket.status === 1 && ( // Verrouillé
+            {/* Conditional actions based on the status */}
+            {ticket.status === 1 && ( // Locked
               <>
                 <Button variant="destructive" onClick={() => openDialog('cancel')}>
                   Annuler la réservation
@@ -262,14 +260,14 @@ export default function TicketDetail({ ticketId }) {
               <Badge className="px-4 py-2">Ticket déjà utilisé</Badge>
             )}
             
-            {ticket.status === 0 && ( // Disponible après annulation
-              <Badge className="px-4 py-2">Ticket libéré</Badge>
+            {ticket.status === 0 && ( // Available after cancellation
+              <Badge className="px-4 py-2">Ticket released</Badge>
             )}
           </CardFooter>
         </Card>
       </div>
       
-      {/* Boîte de dialogue de confirmation */}
+      {/* Confirmation dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>

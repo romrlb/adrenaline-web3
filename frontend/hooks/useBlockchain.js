@@ -8,14 +8,14 @@ import { useWriteContract } from 'wagmi';
 import { hardhat, sepolia } from 'wagmi/chains';
 import { currentChain } from '@/utils/client';
 
-// Mapping des chaînes pour les opérations d'écriture
+// Mapping of chains for write operations
 const CHAIN_MAPPING = {
   hardhat,
   sepolia
-  // Pour ajouter plus de réseaux, les ajouter ici
+  // To add more networks, add them here
 };
 
-// Récupérer la chaîne appropriée pour les opérations d'écriture
+// Get the appropriate chain for write operations
 const getChainForWrite = () => {
   const networkName = process.env.NEXT_PUBLIC_NETWORK || 'hardhat';
   return CHAIN_MAPPING[networkName] || hardhat;
@@ -123,9 +123,9 @@ export function useTicketMetadata(tokenId) {
 //   );
 // }
 
-// Hook simplifié pour obtenir les tickets individuels par ID
+// Hook simplified to get individual tickets by ID
 export function useTicketsById(ticketIds = []) {
-  // Utiliser une référence pour vérifier si les IDs ont réellement changé
+  // Use a reference to check if the IDs have actually changed
   const ticketIdsRef = useRef(ticketIds);
   const ticketIdsKey = useMemo(() => {
     // Check if the IDs have changed significantly

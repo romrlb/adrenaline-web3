@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { parseEther } from 'viem';
 
-// Options temporaires en attendant l'implémentation de Supabase
+// Waiting Supabase implementation
 const CENTERS = [
   { code: '000001', name: 'Centre Parachutisme Paris-Nevers' },
   { code: '000002', name: 'Ciel d\'Aventures' }

@@ -8,7 +8,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime, isExpired, isDateSoon } from '@/utils/date';
 
-// Données statiques pour le MVP
+// Static data waiting supabase
 const MOCK_TICKETS = [
   {
     id: 0,
@@ -32,10 +32,10 @@ const MOCK_TICKETS = [
   }
 ];
 
-// Mapping pour les statuts de tickets
+// Mapping for ticket statuses
 const getStatusInfo = (status) => {
   const statusMap = {
-    0: { text: 'Disponible', color: 'bg-green-100 text-green-800 border-green-200' },
+    0: { text: 'Available', color: 'bg-green-100 text-green-800 border-green-200' },
     1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800 border-orange-200' },
     2: { text: 'En vente', color: 'bg-blue-100 text-blue-800 border-blue-200' },
     3: { text: 'Collector', color: 'bg-purple-100 text-purple-800 border-purple-200' },
@@ -45,13 +45,13 @@ const getStatusInfo = (status) => {
 };
 
 /**
- * Composant pour afficher la liste des tickets réservés par le centre
+ * Component to display the list of tickets reserved by the center
  */
 export default function TicketList() {
-  // Utiliser les données statiques pour le MVP
+  // Use static data for the MVP
   const [tickets] = useState(MOCK_TICKETS);
 
-  // Si aucun ticket réservé
+  // If no ticket reserved
   if (tickets.length === 0) {
     return (
       <Card className="w-full">

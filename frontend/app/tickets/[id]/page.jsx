@@ -43,7 +43,7 @@ const isExpired = (timestamp) => {
   return Number(timestamp) * 1000 < Date.now();
 };
 
-// Function to format price from wei to EUR
+// Function to format the price from wei to EUR
 const formatPrice = (priceInWei) => {
   if (!priceInWei) return '0 EUR';
   try {
@@ -64,11 +64,11 @@ export default function TicketDetailPage({ params }) {
   const { isConnected } = useAccount();
   const [imageError, setImageError] = useState(false);
   
-  // Utiliser les hooks SWR pour charger les données du ticket
+  // Use SWR hooks to load ticket data
   const { data: ticket, error: ticketError, isLoading: isTicketLoading } = useTicket(params.id);
   const { data: metadata, isLoading: isMetadataLoading } = useTicketMetadata(params.id);
   
-  // Déterminer l'état global de chargement et d'erreur
+  // Determine the global loading and error state
   const isLoading = isTicketLoading;
   const error = ticketError ? 
     (ticketError.message || "Le ticket demandé n'existe pas ou n'a pas pu être récupéré.") : 
