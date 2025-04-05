@@ -313,20 +313,6 @@ export default function TicketDetailPage({ params }) {
               </span>
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-4">
-            <Button asChild variant="default" className="flex-1">
-              <Link href={`/reserve/${params.id}`}>
-                Réserver
-              </Link>
-            </Button>
-            
-            <Button asChild variant="outline" className="flex-1">
-              <Link href={`/transfer/${params.id}`}>
-                Transférer
-              </Link>
-            </Button>
-          </div>
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ import { ArrowLeft, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
-// Données statiques pour le MVP basées sur les produits spécifiés
+// Static data for the MVP based on specified products
 const getMockActivity = (id) => {
   const activities = [
     {
@@ -66,12 +66,12 @@ const getMockActivity = (id) => {
   return activities.find(a => a.id === parseInt(id)) || activities[0];
 };
 
-// Fonction pour appeler l'API d'achat de ticket
+// Function to call the ticket purchase API
 async function purchaseTicket(activityCode, walletAddress) {
   try {
-    // Pour le développement et test local, utiliser la simulation
+    // For development and local testing, use simulation
     if (process.env.NEXT_PUBLIC_USE_MOCK === 'true') {
-      console.log(`Simulation: Achat du ticket ${activityCode} pour le wallet ${walletAddress}`);
+      console.log(`Simulation: Purchase of ticket ${activityCode} for wallet ${walletAddress}`);
       await new Promise(resolve => setTimeout(resolve, 1500));
       const tokenId = Math.floor(Math.random() * 1000);
       return { 
@@ -81,15 +81,22 @@ async function purchaseTicket(activityCode, walletAddress) {
       };
     }
     
-    // Appel direct à l'Edge Function Supabase
+    // Verify if the Supabase configuration is available
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     
     if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Configuration Supabase manquante', {
+        hasUrl: !!supabaseUrl,
+        hasAnonKey: !!supabaseAnonKey
+      });
       throw new Error('Configuration Supabase manquante');
     }
     
-    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/create-ticket`;
+    console.log(`Achat du ticket ${activityCode} pour ${walletAddress} via Supabase Edge Function`);
+    
+    // Call the Supabase Edge Function
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/createticket`;
     
     const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
@@ -98,26 +105,42 @@ async function purchaseTicket(activityCode, walletAddress) {
         'Authorization': `Bearer ${supabaseAnonKey}`
       },
       body: JSON.stringify({
-        productCode: activityCode, 
+        productCode: activityCode,
         walletAddress: walletAddress
       }),
     });
     
+    // Verify the response
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Erreur lors de l\'achat du ticket');
+      console.error('Error calling the Edge Function:', errorData);
+      throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
     }
     
+    // Process the response
     const data = await response.json();
-    return { success: true, ticketId: data.tokenId, txHash: data.txHash };
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Échec de la création du ticket');
+    }
+    
+    // Return the created ticket information
+    return {
+      success: true,
+      ticketId: data.tokenId,
+      txHash: data.txHash
+    };
   } catch (error) {
     console.error('Erreur lors de l\'achat:', error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error.message || 'Une erreur inconnue est survenue'
+    };
   }
 }
 
 /**
- * Composant pour afficher les détails d'une activité
+ * Component to display the details of an activity
  */
 export default function ActivityDetail({ activityId }) {
   const router = useRouter();
@@ -128,26 +151,26 @@ export default function ActivityDetail({ activityId }) {
   const [ticketId, setTicketId] = useState(null);
   const { address } = useAccount();
   
-  // Retourner à la liste des activités
+  // Return to the list of activities
   const goBack = () => {
     router.push('/activities');
   };
   
-  // Ouvrir la boîte de dialogue de confirmation d'achat
+  // Open the confirmation dialog for ticket purchase
   const openConfirmationDialog = () => {
     if (!address) {
-      toast.error('Veuillez connecter votre wallet pour acheter un ticket');
+      toast.error('Please connect your wallet to purchase a ticket');
       return;
     }
     setDialogOpen(true);
   };
   
-  // Gérer l'achat du ticket
+  // Handle ticket purchase
   const handlePurchase = async () => {
     setIsProcessing(true);
     
     try {
-      // Appeler la fonction qui interagit avec l'API
+      // Call the function that interacts with the API
       const result = await purchaseTicket(activity.code, address);
       
       if (result.success) {
@@ -167,7 +190,7 @@ export default function ActivityDetail({ activityId }) {
   
   return (
     <div className="container mx-auto py-6 space-y-6">
-      {/* En-tête avec bouton retour */}
+      {/* Header with back button */}
       <div className="flex items-center space-x-2">
         <Button variant="outline" size="icon" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />
@@ -175,9 +198,9 @@ export default function ActivityDetail({ activityId }) {
         <h1 className="text-2xl font-bold">{activity.name}</h1>
       </div>
       
-      {/* Informations principales */}
+      {/* Main information */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Colonne 1: Image et détails basiques */}
+        {/* Column 1: Image and basic details */}
         <div className="md:col-span-2 space-y-4">
           <div className="relative aspect-video overflow-hidden rounded-lg">
             <Image
@@ -202,7 +225,7 @@ export default function ActivityDetail({ activityId }) {
           </div>
         </div>
         
-        {/* Colonne 2: Infos d'achat */}
+        {/* Column 2: Buy ticket info*/}  
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -243,7 +266,7 @@ export default function ActivityDetail({ activityId }) {
         </div>
       </div>
       
-      {/* Boîte de dialogue de confirmation d'achat */}
+      {/* Confirmation dialog for ticket purchase */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
