@@ -9,7 +9,7 @@ import TicketList from './TicketList';
 import Link from 'next/link';
 
 /**
- * Composant principal du tableau de bord du centre
+ * Main component of the center dashboard
  */
 export default function MainPage() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -26,7 +26,7 @@ export default function MainPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-8">
-      {/* En-tête du dashboard */}
+      {/* Header of the dashboard */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{centerData.name}</h1>
@@ -40,17 +40,17 @@ export default function MainPage() {
         </Link>
       </div>
       
-      {/* Onglets principaux */}
+      {/* Main tabs */}    
       <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tickets">Tickets</TabsTrigger>
           <TabsTrigger value="settings">Paramètres</TabsTrigger>
         </TabsList>
 
-        {/* Onglet Vue d'ensemble */}
+        {/* Overview tab */}
         <TabsContent value="overview" className="space-y-6">
-          {/* Cartes statistiques */}
+          {/* Statistics cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -92,10 +92,10 @@ export default function MainPage() {
             </Card>
           </div>
 
-          {/* Aperçu des tickets récents */}
+          {/* Preview of recent tickets */}
           <Card className="col-span-1">
             <CardHeader>
-              <CardTitle>Réservations récentes</CardTitle>
+              <CardTitle>Recent reservations</CardTitle>
               <CardDescription>
                 Aperçu des derniers tickets réservés
               </CardDescription>
@@ -112,12 +112,12 @@ export default function MainPage() {
           </Card>
         </TabsContent>
 
-        {/* Onglet Tickets */}
+        {/* Tickets tab */}
         <TabsContent value="tickets">
           <TicketList />
         </TabsContent>
 
-        {/* Onglet Paramètres */}
+        {/* Settings tab */}
         <TabsContent value="settings">
           <Card>
             <CardHeader>

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { SearchIcon } from 'lucide-react';
 import ActivityCard from './ActivityCard';
 
-// Données statiques pour le MVP basées sur les produits spécifiés
+// Static data for the MVP based on specified products
 const MOCK_ACTIVITIES = [
   {
     id: 0,
@@ -54,17 +54,17 @@ const MOCK_ACTIVITIES = [
 ];
 
 /**
- * Composant pour afficher la liste des activités avec filtres
+ * Component to display the list of activities with filters
  */
 export default function ActivityList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [priceFilter, setPriceFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   
-  // Extraire les lieux uniques pour le filtre
+  // Extract unique locations for the filter
   const locations = [...new Set(MOCK_ACTIVITIES.map(a => a.location))];
   
-  // Filtrer les activités selon les critères
+  // Filter activities based on criteria
   const filteredActivities = MOCK_ACTIVITIES.filter(activity => {
     const matchesSearch = activity.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          activity.description.toLowerCase().includes(searchTerm.toLowerCase());

@@ -8,25 +8,25 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-// Liste de centres pour le MVP
+// List of centers for the MVP
 const CENTERS = [
   { code: '000001', name: 'Centre Parachutisme Paris-Nevers' },
   { code: '000002', name: 'Ciel d\'Aventures' }
 ];
 
 /**
- * Composant pour réserver un ticket (formulaire de lock)
+ * Component to reserve a ticket (lock form)
  * 
  * @param {Object} props
- * @param {Object} props.ticket - Ticket à réserver
- * @param {Function} props.onSubmit - Fonction appelée lors de la soumission du formulaire
- * @param {boolean} props.isLoading - Indique si une opération est en cours
+ * @param {Object} props.ticket - Ticket to reserve
+ * @param {Function} props.onSubmit - Function called when the form is submitted
+ * @param {boolean} props.isLoading - Indicates if an operation is in progress
  */
 export default function TicketReservation({ ticket, onSubmit, isLoading }) {
   const [centerCode, setCenterCode] = useState('');
   const [reservationDate, setReservationDate] = useState('');
   
-  // Initialiser la date de réservation à la date actuelle
+  // Initialize the reservation date to the current date
   useEffect(() => {
     if (ticket) {
       setCenterCode(ticket.centerCode || '');
@@ -46,7 +46,7 @@ export default function TicketReservation({ ticket, onSubmit, isLoading }) {
     }
     
     try {
-      // Convertir la date en timestamp Unix (secondes)
+      // Convert the date to a Unix timestamp (seconds)
       const timestamp = reservationDate 
         ? Math.floor(new Date(reservationDate).getTime() / 1000) 
         : 0;

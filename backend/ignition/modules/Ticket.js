@@ -40,5 +40,18 @@ module.exports = buildModule("TicketModule", (m) => {
     }
   }
 
+  // Add admin wallets to deployment
+  const adminWallets = [
+    "0xE00D2d335DC4108e3C05181d9aD0Ee1c52f11a43", //C
+    "0x386DCEF30EF8037b5576269C59A290c100CdE64d", //T
+    "0x2FD28518e52CF0Fd7b81c8841677606a83dd0A19", //A
+  ];
+  
+  // Add each admin to the contract
+  for (const [index, adminWallet] of adminWallets.entries()) {
+    m.call(ticket, "addAdmin", [adminWallet], { id: `addAdmin_${index}` });
+    console.log(`Admin wallet added: ${adminWallet}`);
+  }
+
   return { ticket };
 });

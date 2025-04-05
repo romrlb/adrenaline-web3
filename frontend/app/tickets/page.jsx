@@ -57,7 +57,7 @@ const formatPrice = (priceInWei) => {
   return `${parseFloat(priceInEth).toFixed(0)} EUR`;
 };
 
-// Composant pour chaque ticket individuel
+// Component for each individual ticket
 function TicketItem({ ticket }) {
   const [imageError, setImageError] = useState(false);
   const { data: metadata, isLoading: isLoadingMetadata } = useTicketMetadata(ticket.id);
@@ -77,7 +77,7 @@ function TicketItem({ ticket }) {
 
   return (
     <Card className="overflow-hidden border-2 border-gray-400 hover:border-gray-600 shadow-sm hover:shadow flex flex-col">
-      {/* Image avec état de chargement */}
+      {/* Image with loading state */}
       <div className="relative w-full aspect-square bg-gray-100">
         {isLoadingMetadata ? (
           <div className="flex items-center justify-center h-full w-full">
@@ -98,7 +98,7 @@ function TicketItem({ ticket }) {
           />
         )}
         
-        {/* Badge de statut */}
+        {/* Status badge */}
         <div className="absolute top-3 right-3">
           <Badge variant="outline" className={`${status.color} shadow-sm`}>
             {status.text}
@@ -114,7 +114,7 @@ function TicketItem({ ticket }) {
           </div>
         </div>
         
-        {/* Métadonnées du ticket si disponibles */}
+        {/* Ticket metadata if available */}
         {metadata && metadata.name && (
           <div className="mt-2">
             <h3 className="font-medium">{metadata.name}</h3>

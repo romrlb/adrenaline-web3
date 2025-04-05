@@ -23,7 +23,7 @@ const getStatusColor = (status) => {
 };
 
 /**
- * Pour le MVP, nous utilisons des données statiques
+ * For the MVP, we use static data
  */
 const getMockTicket = (id) => {
   return {
@@ -43,11 +43,11 @@ const getMockTicket = (id) => {
 export default function TicketDetail({ ticketId }) {
   const router = useRouter();
   
-  // Pour le MVP, nous utilisons des données statiques
-  // Dans une version réelle, nous utiliserions useTicket(ticketId)
+  // For the MVP, we use static data
+  // In a real version, we would use useTicket(ticketId)
   const [ticket, setTicket] = useState(null);
   
-  // Simuler un chargement asynchrone
+  // Simulate an asynchronous loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setTicket(getMockTicket(ticketId));
@@ -56,7 +56,7 @@ export default function TicketDetail({ ticketId }) {
     return () => clearTimeout(timer);
   }, [ticketId]);
   
-  // Retourner à la liste des tickets
+  // Return to the list of tickets
   const goBack = () => {
     router.push('/tickets');
   };
@@ -76,7 +76,7 @@ export default function TicketDetail({ ticketId }) {
   
   return (
     <div className="container mx-auto py-6 space-y-6 max-w-3xl">
-      {/* En-tête avec bouton retour */}
+      {/* Header with back button */}
       <div className="flex items-center space-x-2">
         <Button variant="outline" size="icon" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />

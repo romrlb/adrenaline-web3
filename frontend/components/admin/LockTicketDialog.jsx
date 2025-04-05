@@ -9,7 +9,7 @@ import { ReloadIcon, LockClosedIcon } from '@radix-ui/react-icons';
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Options temporaires en attendant l'implémentation de Supabase
+// Waiting Supabase implementation
 const CENTERS = [
   { code: '000001', name: 'Centre Parachutisme Paris-Nevers' },
   { code: '000002', name: 'Ciel d\'Aventures' }

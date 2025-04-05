@@ -15,7 +15,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
-// Données statiques pour le MVP
+// Static data waiting supabase
 const AVAILABLE_PRODUCTS = [
   {
     id: 0,
@@ -55,7 +55,7 @@ const AVAILABLE_PRODUCTS = [
   }
 ];
 
-// Créneaux horaires disponibles
+// Available time slots
 const TIME_SLOTS = [
   { id: 1, time: '09:00' },
   { id: 2, time: '10:00' },
@@ -66,7 +66,7 @@ const TIME_SLOTS = [
 ];
 
 /**
- * Composant pour réserver un nouveau ticket
+ * Component to reserve a new ticket
  */
 export default function ReserveTicket() {
   const router = useRouter();
@@ -83,27 +83,27 @@ export default function ReserveTicket() {
   const [isReserved, setIsReserved] = useState(false);
   const [newTicketId, setNewTicketId] = useState(null);
   
-  // Gérer le changement d'étape
+  // Handle step change
   const nextStep = () => setStep(prev => prev + 1);
   const prevStep = () => setStep(prev => Math.max(1, prev - 1));
   
-  // Gérer la sélection de produit
+  // Handle product selection
   const selectProduct = (product) => {
     setSelectedProduct(product);
     nextStep();
   };
   
-  // Vérifier si une date et un créneau horaire sont sélectionnés
+  // Check if a date and a time slot are selected
   const isDateTimeSelected = date && timeSlot;
   
-  // Vérifier si les informations client sont complètes
+  // Check if client information is complete
   const isClientInfoComplete = () => {
     return clientInfo.name.trim() !== '' && 
            clientInfo.email.trim() !== '' && 
            clientInfo.phone.trim() !== '';
   };
   
-  // Gérer les changements dans le formulaire
+  // Handle input changes in the form
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setClientInfo(prev => ({
@@ -112,14 +112,14 @@ export default function ReserveTicket() {
     }));
   };
   
-  // Confirmer la date et le créneau
+  // Confirm the date and the time slot
   const confirmDateTime = () => {
     if (isDateTimeSelected) {
       nextStep();
     }
   };
   
-  // Effectuer la réservation
+  // Perform the reservation
   const handleReservation = async () => {
     if (!selectedProduct || !date || !timeSlot || !isClientInfoComplete()) {
       return;
@@ -127,15 +127,15 @@ export default function ReserveTicket() {
     
     setIsReserving(true);
     
-    // Simuler un appel API
+    // Simulate an API call
     setTimeout(() => {
       setIsReserving(false);
       setIsReserved(true);
-      setNewTicketId(Math.floor(Math.random() * 1000)); // ID fictif pour le MVP
+      setNewTicketId(Math.floor(Math.random() * 1000)); // Fake ID for the MVP
     }, 1500);
   };
   
-  // Retourner à la page principale
+  // Return to the main page
   const goBack = () => {
     if (step > 1 && !isReserved) {
       prevStep();
@@ -144,14 +144,14 @@ export default function ReserveTicket() {
     }
   };
   
-  // Rediriger vers les détails du ticket
+  // Redirect to the ticket details
   const goToTicketDetails = () => {
     router.push(`/center/ticket/${newTicketId}`);
   };
   
   return (
     <div className="container mx-auto py-6 space-y-6">
-      {/* En-tête */}
+      {/* Header */}
       <div className="flex items-center space-x-2">
         <Button variant="outline" size="icon" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />
@@ -163,7 +163,7 @@ export default function ReserveTicket() {
         </h1>
       </div>
       
-      {/* Indicateur d'étape (sauf si réservation confirmée) */}
+      {/* Step indicator (except if reservation confirmed) */}
       {!isReserved && (
         <div className="flex items-center justify-center space-x-2 py-2">
           <div className={`h-2 w-2 rounded-full ${step >= 1 ? 'bg-primary' : 'bg-gray-200'}`}></div>
@@ -172,9 +172,9 @@ export default function ReserveTicket() {
         </div>
       )}
       
-      {/* Contenu principal */}
+      {/* Main content */}
       <div className="max-w-3xl mx-auto">
-        {/* Étape 1: Sélection du produit */}
+        {/* Step 1: Product selection */}
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Choisissez une activité</h2>
@@ -231,14 +231,14 @@ export default function ReserveTicket() {
           </div>
         )}
         
-        {/* Étape 2: Sélection de la date et du créneau */}
+        {/* Step 2: Date and time slot selection */}
         {step === 2 && selectedProduct && (
           <Card>
             <CardHeader>
               <CardTitle>Choisissez une date et un créneau</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Affichage du produit sélectionné */}
+              {/* Display the selected product */}
               <div className="flex items-center space-x-4">
                 <div className="relative h-16 w-16 rounded-md overflow-hidden">
                   <Image
@@ -257,7 +257,7 @@ export default function ReserveTicket() {
               
               <Separator />
               
-              {/* Sélecteur de date */}
+              {/* Date selector */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <Label className="block mb-2">Date</Label>
@@ -275,9 +275,9 @@ export default function ReserveTicket() {
                   </div>
                 </div>
                 
-                {/* Sélecteur de créneau horaire */}
+                {/* Time slot selector */}
                 <div>
-                  <Label className="block mb-2">Créneau horaire</Label>
+                  <Label className="block mb-2">Time slot</Label>
                   <div className={`space-y-2 ${!date ? 'opacity-50 pointer-events-none' : ''}`}>
                     <RadioGroup value={timeSlot} onValueChange={setTimeSlot}>
                       {TIME_SLOTS.map(slot => (
@@ -299,7 +299,7 @@ export default function ReserveTicket() {
                 </div>
               </div>
               
-              {/* Affichage de la sélection */}
+              {/* Display the selection */}
               {isDateTimeSelected && (
                 <Alert className="mt-4">
                   <Calendar className="h-4 w-4" />
@@ -324,16 +324,16 @@ export default function ReserveTicket() {
           </Card>
         )}
         
-        {/* Étape 3: Informations client et confirmation */}
+        {/* Step 3: Client information and confirmation */}
         {step === 3 && selectedProduct && date && timeSlot && (
           <Card>
             <CardHeader>
               <CardTitle>Finaliser la réservation</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Récapitulatif */}
+              {/* Summary */}
               <div className="bg-gray-50 p-4 rounded-md space-y-2">
-                <h3 className="font-semibold">Récapitulatif</h3>
+                <h3 className="font-semibold">Summary</h3>
                 <div className="grid grid-cols-2 gap-y-2 text-sm">
                   <div className="font-medium">Activité:</div>
                   <div>{selectedProduct.name}</div>
@@ -351,9 +351,9 @@ export default function ReserveTicket() {
               
               <Separator />
               
-              {/* Formulaire client */}
+              {/* Client form */}
               <div className="space-y-4">
-                <h3 className="font-semibold">Informations client</h3>
+                <h3 className="font-semibold">Client information</h3>
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <Label htmlFor="name">Nom complet</Label>
@@ -414,7 +414,7 @@ export default function ReserveTicket() {
           </Card>
         )}
         
-        {/* Confirmation de réservation */}
+        {/* Reservation confirmation */}
         {isReserved && (
           <Card>
             <CardHeader className="text-center pb-2">
