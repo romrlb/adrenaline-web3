@@ -7,6 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ReloadIcon, LockClosedIcon } from '@radix-ui/react-icons';
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Options temporaires en attendant l'implémentation de Supabase
+const CENTERS = [
+  { code: '000001', name: 'Centre Parachutisme Paris-Nevers' },
+  { code: '000002', name: 'Ciel d\'Aventures' }
+];
 
 /**
  * Dialog component for locking a ticket
@@ -64,14 +71,23 @@ export default function LockTicketDialog({ isOpen, ticket, onClose, onLock, isLo
       <div className="space-y-4 py-4">
         <div className="space-y-2">
           <Label htmlFor="lockCenterCode">Code centre</Label>
-          <Input
-            id="lockCenterCode"
+          <Select
             value={centerCode}
-            onChange={(e) => setCenterCode(e.target.value)}
-            placeholder="000001"
-          />
+            onValueChange={(value) => setCenterCode(value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Choisir un centre" />
+            </SelectTrigger>
+            <SelectContent>
+              {CENTERS.map((center) => (
+                <SelectItem key={center.code} value={center.code}>
+                  {center.code} - {center.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-sm text-gray-500">
-            Entrez le code du centre qui réserve ce ticket.
+            Sélectionnez le centre qui réserve ce ticket.
           </p>
         </div>
         

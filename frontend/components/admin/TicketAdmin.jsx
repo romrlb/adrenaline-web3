@@ -14,6 +14,7 @@ import { parseEther, formatEther } from 'viem';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DialogTrigger, DialogTitle, DialogDescription, DialogHeader, DialogFooter, DialogContent, Dialog } from "@/components/ui/dialog";
 import Image from 'next/image';
+import ClearCacheButton from './ClearCacheButton';
 
 // New imports for SWR
 import { useTicketsById, useTicket, useTicketMetadata } from '@/hooks/useBlockchain';
@@ -30,11 +31,11 @@ import UseTicketDialog from './UseTicketDialog';
 // Utility function to get status information (moved before components)
 const getStatusInfo = (status) => {
   const statusMap = {
-    0: { text: 'Available', color: 'bg-green-100 text-green-800 border-green-200' },
-    1: { text: 'Locked', color: 'bg-orange-100 text-orange-800 border-orange-200' },
-    2: { text: 'For Sale', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+    0: { text: 'Disponible', color: 'bg-green-100 text-green-800 border-green-200' },
+    1: { text: 'Verrouillé', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+    2: { text: 'En vente', color: 'bg-blue-100 text-blue-800 border-blue-200' },
     3: { text: 'Collector', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-    4: { text: 'Expired', color: 'bg-red-100 text-red-800 border-red-200' }
+    4: { text: 'Expiré', color: 'bg-red-100 text-red-800 border-red-200' }
   };
   return statusMap[status] || { text: 'Unknown', color: 'bg-gray-100 text-gray-800 border-gray-200' };
 };
@@ -100,7 +101,7 @@ export default function TicketAdmin() {
       // Utiliser des valeurs par défaut et vérifier que fetchedTickets est un tableau
       const ticketsArray = Array.isArray(fetchedTickets) ? fetchedTickets : [];
       
-      // Filtrer les tickets pour la page actuelle
+      // Filter tickets for the current page
       const pageTickets = ticketsArray.filter(
         ticket => Number(ticket.id) >= startId && Number(ticket.id) < endId
       );
@@ -143,7 +144,6 @@ export default function TicketAdmin() {
       debounceTimer.current = setTimeout(() => {
         console.log('TicketAdmin: Processing', logs.length, 'new event logs');
         
-        // Vérifier si de nouveaux tickets ont été créés
         const newTicketIds = logs
           .filter(log => log.eventName === 'TicketCreated')
           .map(log => Number(log.args.tokenId));
@@ -155,9 +155,8 @@ export default function TicketAdmin() {
           }
         }
         
-        // Recharger les tickets pour refléter les changements
         refreshTickets();
-      }, 2000); // Délai de 2 secondes pour regrouper les événements
+      }, 2000);
     },
     [isConnected, nextId, refreshTickets]
   );
@@ -176,7 +175,7 @@ export default function TicketAdmin() {
     abi: ADRENALINE_CONTRACT_ABI,
     eventName: 'TicketStatusChanged',
     onLogs,
-    pollingInterval: 5000, // 5 secondes
+    pollingInterval: 5000,
   });
 
   // Pagination handlers
@@ -357,8 +356,11 @@ export default function TicketAdmin() {
   return (
     <Card className="w-full">
       <Tabs defaultValue="list" className="w-full">
-        <CardHeader>
-          <CardTitle>Gestion des tickets</CardTitle>
+        <CardHeader className="flex flex-col space-y-1.5">
+          <div className="flex items-center justify-between">
+            <CardTitle>Gestion des tickets</CardTitle>
+            <ClearCacheButton/>
+          </div>
           <CardDescription>Gestion des tickets NFT</CardDescription>
           <TabsList className="grid w-full grid-cols-2 mt-2">
             <TabsTrigger value="list">Liste des tickets</TabsTrigger>

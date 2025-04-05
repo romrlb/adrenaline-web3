@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ReloadIcon, LockOpen2Icon } from '@radix-ui/react-icons';
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -19,24 +17,9 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
  * @param {boolean} props.isLoading - Whether unlock action is in progress
  */
 export default function UnlockTicketDialog({ isOpen, ticket, onClose, onUnlock, isLoading }) {
-  const [centerCode, setCenterCode] = useState('');
-
-  // Set initial center code from ticket when dialog opens
-  useEffect(() => {
-    if (ticket && isOpen) {
-      setCenterCode(ticket.centerCode || '');
-    }
-  }, [ticket, isOpen]);
-
   const handleSubmit = () => {
     if (!ticket) return;
-    
-    if (!centerCode) {
-      toast.error('Center code is required');
-      return;
-    }
-    
-    onUnlock(ticket.id, centerCode);
+    onUnlock(ticket.id);
   };
 
   return (
@@ -49,15 +32,9 @@ export default function UnlockTicketDialog({ isOpen, ticket, onClose, onUnlock, 
       </DialogHeader>
       <div className="space-y-4 py-4">
         <div className="space-y-2">
-          <Label htmlFor="unlockCenterCode">Code centre</Label>
-          <Input
-            id="unlockCenterCode"
-            value={centerCode}
-            onChange={(e) => setCenterCode(e.target.value)}
-            placeholder="000001"
-          />
           <p className="text-sm text-gray-500">
-            Entrez le code du centre qui libère ce ticket.
+            Le ticket est actuellement verrouillé par le centre {ticket?.centerCode || 'Unknown'}. 
+            Voulez-vous vraiment le déverrouiller ?
           </p>
         </div>
       </div>
@@ -66,7 +43,7 @@ export default function UnlockTicketDialog({ isOpen, ticket, onClose, onUnlock, 
           type="button"
           variant="default"
           onClick={handleSubmit}
-          disabled={isLoading || !centerCode}
+          disabled={isLoading}
         >
           {isLoading ? (
             <>
